@@ -45,6 +45,7 @@ Driver driver_named(const std::string& s, const Anim& a, int& curve) {
     if (s == "idle") return Driver::idle;
     if (s == "smoulder") return Driver::smoulder;
     if (s == "speed") return Driver::speed;
+    if (s == "throttle") return Driver::throttle;
     return Driver::one;
 }
 

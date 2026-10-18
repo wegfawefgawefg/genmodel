@@ -294,6 +294,26 @@ void gait_prepare(Anim& a, const Rig& rig) {
         float tt = i * a.table_dt;
         a.speed_table[i] = g.table[std::min((size_t)(tt / g.dt), g.table.size() - 1)].speed;
     }
+    // ground travelled, so smoke and afterglow can be left behind on it
+    a.ground_table.assign(a.speed_table.size(), 0.0f);
+    for (size_t i = 0; i < a.ground_table.size(); i++) {
+        a.ground_table[i] = g.table[std::min((size_t)(i * a.table_dt / g.dt), g.table.size() - 1)].ground;
+    }
+    a.ground_total = g.table.back().ground;
+    // throttle: opens quickly once it is moving, eases shut as soon as it slows down
+    a.throttle_table.assign(a.speed_table.size(), 0.0f);
+    float open = 0, prev = 0, accel = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        for (size_t i = 0; i < a.speed_table.size(); i++) {
+            float v = a.speed_table[i];
+            accel += ((v - prev) / a.table_dt - accel) * std::min(a.table_dt / 0.25f, 1.0f);
+            prev = v;
+            float target = (v > 0.25f && accel > -0.35f) ? 1.0f : 0.0f;
+            float rate = target > open ? 1.0f / 0.35f : 1.0f / 0.8f;
+            open += (target - open) * std::min(a.table_dt * rate, 1.0f);
+            if (pass == 1) a.throttle_table[i] = open;
+        }
+    }
     float total = g.table.back().ground;
     g.ground_period = total > 0.5f ? total / std::max(1.0f, std::round(total / 1.5f)) : 1.5f;
 }

@@ -14,7 +14,7 @@ from mech import Joint, assemble, mirrored
 from scene import Material, Scene
 
 UNIT = 0.05
-STYLE = "lofi"
+STYLE = "mech"
 TEXTURE = 2048  # a whole mech needs more texels than a gun
 GROUNDED = True  # the build stands it on y = 0
 

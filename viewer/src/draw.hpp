@@ -28,6 +28,7 @@ struct Gpu {
     uint32_t fx_program = 0, fx_vao = 0, fx_vbo = 0, fx_atlas = 0;
     uint32_t tiles[3] = {0, 0, 0}; // repeating tile textures (material layers 1-3)
     uint32_t ground_program = 0;
+    uint32_t env = 0; // sphere-mapped fake reflection
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };
@@ -36,6 +37,7 @@ struct DrawOptions {
     bool wire = false;    // wireframe over the shaded model
     bool flat = false;    // ignore the texture, show grey clay
     bool show_uv = false; // show the uv layout as a checker
+    float reflect = 0.8f;  // the fake environment reflection's strength (E toggles it)
 };
 
 const int max_parts = 128;

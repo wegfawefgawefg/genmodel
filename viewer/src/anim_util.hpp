@@ -46,12 +46,20 @@ inline float drive(const Anim& a, const Drive& d, float t) {
     if (d.driver == Driver::idle) v = table_at(a.idle_table, a.table_dt, t);
     if (d.driver == Driver::curve && d.curve >= 0) v = table_at(a.curves[d.curve].table, a.table_dt, t);
     if (d.driver == Driver::speed) v = table_at(a.speed_table, a.table_dt, t);
+    if (d.driver == Driver::throttle) v = table_at(a.throttle_table, a.table_dt, t);
     if (d.driver == Driver::smoulder) {
         float idle = table_at(a.idle_table, a.table_dt, t);
         v = table_at(a.heat_table, a.table_dt, t) * idle * idle;
     }
     v *= d.k;
     return d.eased ? ease(d.ease, std::clamp(v, 0.0f, 1.0f)) : v;
+}
+
+// ground travelled by time t, counting whole loops (t may run before 0 or past the length)
+inline float ground_at(const Anim& a, float t) {
+    if (a.ground_table.empty()) return 0;
+    float loops = std::floor(t / a.length);
+    return table_at(a.ground_table, a.table_dt, t - loops * a.length) + loops * a.ground_total;
 }
 
 inline float wrap_time(const Anim& a, float t) {

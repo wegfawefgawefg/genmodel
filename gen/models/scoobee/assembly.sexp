@@ -31,7 +31,7 @@
 
   ; arms hanging forward, elbows bent, the rifle carried low
   (part upper_arm_r (model upper_arm) (on torso shoulder_r) (turn x -14 z 28))
-  (part forearm_r (model forearm) (on upper_arm_r elbow) (turn x 34 z -12))
+  (part forearm_r (model forearm) (on upper_arm_r elbow) (turn x 12 z -8))
   (part claw_r (model claw) (on forearm_r wrist) (turn x -10))
   (part rifle (on claw_r grip) (turn x 4))
   (part upper_arm_l (model upper_arm) (on torso shoulder_l) (mirror) (turn x -8 z -28))

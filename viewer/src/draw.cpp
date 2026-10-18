@@ -3,6 +3,7 @@
 #include <GL/glcorearb.h>
 
 #include <algorithm>
+#include <vector>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -47,6 +48,8 @@ in vec3 v_glow;
 flat in float v_layer;
 uniform sampler2D u_tex;
 uniform sampler2D u_tile0, u_tile1, u_tile2;
+uniform sampler2D u_env;
+uniform float u_reflect;
 uniform int u_mode; // 0 textured, 1 clay, 2 uv checker, 3 wire, 4 additive glow
 out vec4 o_color;
 void main() {
@@ -105,6 +108,13 @@ void main() {
     float rim = pow(1.0 - max(dot(n, eye), 0.0), 3.0) * max(dot(n, rim_dir) + 0.4, 0.0);
 
     vec3 col = diffuse + key_col * spec * nk + rim_col * rim * (0.15 + 0.35 * shine);
+    // the old trick for chrome and gloss: a sphere-mapped picture of a world, looked up by
+    // the view-space reflection, masked by how shiny the texel is, stronger at grazing angles
+    vec3 r = reflect(-eye, n);
+    float m = 2.0 * sqrt(r.x * r.x + r.y * r.y + (r.z + 1.0) * (r.z + 1.0));
+    vec3 env = pow(texture(u_env, r.xy / m + 0.5).rgb, vec3(2.2));
+    float grazing = pow(1.0 - max(dot(n, eye), 0.0), 2.0);
+    col = col * (1.0 - 0.25 * u_reflect * shine) + env * u_reflect * (0.08 + 1.4 * pow(shine, 1.5)) * (0.5 + 0.5 * grazing) * mix(vec3(1.0), albedo * 2.5 + 0.2, 0.3);
     // heat and lamps: emissive on top of the lighting; dark metal shows heat most,
     // and a hot part's own lighting fades under the glow
     float dark = 1.0 - clamp(dot(albedo, vec3(0.33)) * 3.0, 0.0, 1.0);
@@ -254,6 +264,54 @@ void mat_look_at(float* m, const float* eye, const float* target) {
 
 } // namespace
 
+// a sphere map of a made-up place: bright sky above, a hot horizon, blue-grey building
+// silhouettes, a sun glint, dark ground below. Indexed by view-space reflection direction.
+static void make_env(Gpu& gpu) {
+    const int n = 256;
+    std::vector<unsigned char> px(n * n * 4);
+    for (int y = 0; y < n; y++) {
+        for (int x = 0; x < n; x++) {
+            float u = (x + 0.5f) / n * 2 - 1, v = 1 - (y + 0.5f) / n * 2;
+            float rr = u * u + v * v;
+            float rgb[3] = {0, 0, 0};
+            if (rr <= 1) {
+                // the reflected direction this texel stands for
+                float z = 1 - 2 * rr;
+                float s = std::sqrt(std::max(0.0f, 1 - z * z)) / std::max(std::sqrt(rr), 1e-6f);
+                float dx = u * s, dy = v * s;
+                float h = dy; // up component
+                float sky = std::clamp(h * 1.6f, 0.0f, 1.0f);
+                float horizon = std::exp(-h * h * 60.0f);
+                for (int c = 0; c < 3; c++) {
+                    float top[3] = {0.55f, 0.66f, 0.8f}, low[3] = {0.95f, 0.9f, 0.82f}, ground[3] = {0.16f, 0.14f, 0.12f};
+                    rgb[c] = h > 0 ? low[c] + (top[c] - low[c]) * sky : ground[c] * (1 + h);
+                    rgb[c] += horizon * 0.25f;
+                }
+                // building silhouettes along the horizon
+                float az = std::atan2(dx, z);
+                float bld = 0.12f + 0.1f * std::fabs(std::sin(az * 7.3f)) + 0.08f * std::fabs(std::sin(az * 17.0f + 1.0f));
+                if (h > 0 && h < bld) {
+                    for (int c = 0; c < 3; c++) rgb[c] = rgb[c] * 0.45f + 0.08f * (c == 2 ? 1.3f : 1.0f);
+                }
+                // a sun glint high on one side
+                float sx = dx - 0.45f, sy = dy - 0.62f;
+                float sun = std::exp(-(sx * sx + sy * sy) * 120.0f);
+                for (int c = 0; c < 3; c++) rgb[c] += sun * 1.2f;
+            }
+            for (int c = 0; c < 3; c++) px[(y * n + x) * 4 + c] = (unsigned char)(std::clamp(std::pow(rgb[c], 1 / 2.2f), 0.0f, 1.0f) * 255);
+            px[(y * n + x) * 4 + 3] = 255;
+        }
+    }
+    glGenTextures(1, &gpu.env);
+    glBindTexture(GL_TEXTURE_2D, gpu.env);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
 bool gpu_init(Gpu& gpu) {
     gpu.program = link(model_vs, model_fs);
     gpu.back_program = link(back_vs, back_fs);
@@ -266,6 +324,7 @@ bool gpu_init(Gpu& gpu) {
     glGenBuffers(1, &gpu.ibo);
     glGenTextures(1, &gpu.texture);
     gpu.ground_program = link(ground_vs, ground_fs);
+    make_env(gpu);
     return fx_init(gpu);
 }
 
@@ -380,6 +439,10 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const P
         uvoff[i * 2 + 1] = pose.uv[i].y;
     }
     glUniform2fv(glGetUniformLocation(gpu.program, "u_uvoff"), n_bones, uvoff.data());
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, gpu.env);
+    glUniform1i(glGetUniformLocation(gpu.program, "u_env"), 4);
+    glUniform1f(glGetUniformLocation(gpu.program, "u_reflect"), opt.reflect);
     const char* tile_names[3] = {"u_tile0", "u_tile1", "u_tile2"};
     for (int i = 0; i < 3; i++) {
         glActiveTexture(GL_TEXTURE1 + i);

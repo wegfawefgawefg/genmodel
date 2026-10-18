@@ -330,8 +330,10 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
     out.bones.resize(rig.parts.size());
     out.glow.resize(rig.parts.size());
     out.uv.resize(rig.parts.size());
+    std::vector<Mat4> locals(rig.parts.size());
     for (size_t i = 0; i < rig.parts.size(); i++) {
         Mat4 local = part_local(rig.parts[i], acc[i]);
+        locals[i] = local;
         int p = rig.parts[i].parent;
         out.bones[i] = p >= 0 && p < (int)i ? out.bones[p] * local : local;
         out.glow[i] = acc[i].glow;
@@ -340,6 +342,21 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
     // legs reach their planted feet by IK, overriding what the hierarchy gave them
     out.ground_on = false;
     gait_legs(a, rig, t, out);
+    // anything hanging off a part the IK moved (flaps on a shin...) follows it again
+    if (a.gait.on) {
+        std::vector<char> moved(rig.parts.size(), 0);
+        for (const GaitLeg& l : a.gait.legs)
+            for (int p : l.part)
+                if (p >= 0) moved[p] = 1;
+        std::vector<char> solved = moved;
+        for (size_t i = 0; i < rig.parts.size(); i++) {
+            int p = rig.parts[i].parent;
+            if (p >= 0 && p < (int)i && moved[p] && !solved[i]) {
+                out.bones[i] = out.bones[p] * locals[i];
+                moved[i] = 1;
+            }
+        }
+    }
     aim_rams(rig, out.bones);
     for (size_t i = 0; i < rig.paths.size(); i++) {
         place_links(rig, rig.paths[i], feed[i], out.bones);

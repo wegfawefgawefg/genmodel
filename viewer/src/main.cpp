@@ -71,6 +71,8 @@ static bool parse_args(int argc, char** argv, Args& a) {
             a.opt.wire = true;
         } else if (s == "--clay") {
             a.opt.flat = true;
+        } else if (s == "--reflect" && has_next) {
+            a.opt.reflect = (float)atof(argv[++i]);
         } else if (s == "--uv") {
             a.opt.show_uv = true;
         } else if (s[0] != '-') {
@@ -188,6 +190,7 @@ static int run_window(const Args& a, Asset& asset) {
     bool muted = false;
     printf("drag: orbit   right drag: pan   wheel: zoom   W: wire   C: clay   U: uvs\n"
            "space: spin   R: reset view   P: pause   , .: step   [ ]: slower/faster   M: mute\n"
+           "E: fake reflections on/off\n"
            "Esc: quit\n"
            "(reloads when the model or animation files change)\n");
 
@@ -246,6 +249,8 @@ static int run_window(const Args& a, Asset& asset) {
                     speed = std::fmin(speed * 2.0f, 4.0f);
                 } else if (k == SDLK_M) {
                     muted = !muted;
+                } else if (k == SDLK_E) {
+                    opt.reflect = opt.reflect > 0 ? 0.0f : 0.8f;
                 }
             }
         }

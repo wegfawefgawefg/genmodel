@@ -60,17 +60,19 @@
   ; and glances about now and then
   (wave head (rot 0 1 0 8) (freq 0.11))
 
-  ; the cup flaps over the intakes swing open with speed and flutter in the airflow
-  (lean flap_r (by speed 0.125 smooth) (rot 0 1 0 -50))
-  (lean flap_l (by speed 0.125 smooth) (rot 0 1 0 50))
-  (shake flap_r flap_l (by speed 0.6) (freq 7) (rot 0 1 0 2))
-  (lean shin_flap_r (by speed 0.125 smooth) (rot 0 1 0 -40))
-  (lean shin_flap_l (by speed 0.125 smooth) (rot 0 1 0 40))
+  ; the cup flaps over the intakes snap open as it gets moving and ease shut as it slows,
+  ; fluttering in the airflow while they're open
+  (lean flap_r (by throttle 1 smooth) (rot 0 1 0 -24))
+  (lean flap_l (by throttle 1 smooth) (rot 0 1 0 24))
+  (shake flap_r flap_l (by throttle 1) (freq 8) (rot 0 1 0 2.5))
+  (lean shin_flap_r (by throttle 1 smooth) (rot 0 0 1 18))
+  (lean shin_flap_l (by throttle 1 smooth) (rot 0 0 1 -18))
+  (shake shin_flap_r shin_flap_l (by throttle 1) (freq 9) (rot 0 0 1 2))
 
   ; the engine breathes out of its stacks all the time, more when it works
-  (wisp torso (from 0.34 5.45 -1.69) (by one) (points 56) (life 2.6) (rise 0.35 0.05) (curl 0.03 0.25)
+  (wisp torso (from 0.24 5.1 -1.365) (by one) (points 56) (life 2.6) (rise 0.35 0.05) (curl 0.03 0.25)
     (wind 0 0.05 -0.5) (size 0.08 0.8 1.0) (color 0.32 0.31 0.3 0.3))
-  (wisp torso (from -0.34 5.3 -1.66) (by one) (points 56) (life 2.4) (rise 0.32 0.05) (curl 0.03 0.22)
+  (wisp torso (from -0.24 5.02 -1.35) (by one) (points 56) (life 2.4) (rise 0.32 0.05) (curl 0.03 0.22)
     (wind 0 0.05 -0.5) (size 0.08 0.75 1.0) (color 0.3 0.29 0.28 0.28))
 
   ; round tail lamps that leave a glow behind them as the body moves

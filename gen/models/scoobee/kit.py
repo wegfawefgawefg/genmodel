@@ -103,8 +103,8 @@ def pipe(points, r, mat=DARK):
     return sdf.Bend(Cylinder(r, c.length * 0.5, mat, axis="x").at(c.length * 0.5, 0, 0), c, across=(1, 0, 0))
 
 
-def antenna(base, tip, r=0.012, mat=CHROME):
-    """A long whip swept back from a base boss, with a ball at the tip."""
+def antenna(base, tip, r=0.008, mat=CHROME):
+    """A long thin whip swept back from a base boss."""
     base, tip = np.asarray(base, np.float32), np.asarray(tip, np.float32)
-    return Union(Cylinder(r * 3.5, 0.03, DARK, axis="y", ch=0.01).at(*base), segment(base, tip, r, mat),
-                 segment(base, base + (tip - base) * 0.18, r * 1.8, DARK), sdf.Sphere(r * 2.2, DARK).at(*tip))
+    return Union(Cylinder(r * 4, 0.025, DARK, axis="y", ch=0.008).at(*base), segment(base, tip, r, mat),
+                 segment(base, base + (tip - base) * 0.15, r * 2, DARK))

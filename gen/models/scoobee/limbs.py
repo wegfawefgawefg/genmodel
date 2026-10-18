@@ -58,13 +58,14 @@ def shin():
     pieces[0].cut(Box(1.0, 0.007, 1.0, TAN).at(0, -1.45, 0))
     pieces[0].cut(Box(0.007, 0.7, 1.0, TAN).at(0, -0.85, 0.3))
     return MechPart("shin", pieces, {"ankle": socket("ankle", ANKLE, *ankle_at),
-                                     "flap": socket("flap", FLAP, 0.24, -0.78, 0.18)})
+                                     # the calf flap's cup runs down the shin from a hinge on its side
+                                     "flap": socket("flap", FLAP, 0.27, -0.62, 0.08, rot=[("x", -90)])})
 
 
 def shin_flap():
     """A smaller cup flap over the shin's intake, opening with speed like the body's."""
     from models.scoobee.kit import cup_flap
-    cup = cup_flap(0.13, 0.55, TAN, 0.02)
+    cup = cup_flap(0.1, 0.42, TAN, 0.018)
     hinge = Cylinder(0.022, 0.08, DARK, axis="y", ch=0.008)
     return MechPart("shin_flap", [Piece("cup", cup, h=0.014, tris=160, mesher="contour"), Piece("hinge", hinge, h=0.015, tris=24)], {})
 
@@ -134,7 +135,8 @@ def forearm():
     shell = Loft(stations, TAN)
     shell = sdf.Paint(shell, Box(1.0, 0.06, 1.0, ORANGE).at(0, -0.56, 0), ORANGE)
     cuff = Cylinder(0.11, 0.035, RUST, axis="y", ch=0.015).at(0, -0.89, 0)
-    body = Union(knuckle(ELBOW, DARK, CHROME), cuff, housing(WRIST, DARK).at(*wrist_at))
+    lug = Box(0.035, 0.05, 0.05, DARK, ch=0.015).at(0, -0.22, 0.18)  # bicep ram pin, on the shell
+    body = Union(knuckle(ELBOW, DARK, CHROME), cuff, lug, housing(WRIST, DARK).at(*wrist_at))
     pieces = [Piece("gauntlet", shell, h=0.025, tris=200), Piece("joints", body, h=0.02, tris=260)]
     pieces[0].cut(Box(1.0, 0.006, 1.0, TAN).at(0, -0.35, 0))
     return MechPart("forearm", pieces, {"wrist": socket("wrist", WRIST, *wrist_at)})
@@ -168,31 +170,33 @@ def claw():
     thumb = finger((0.09, -0.11, -0.05), 35, -30, (0.08, 0.07), 0.026)
     body = Union(knuckle(WRIST, DARK), palm, *fingers, thumb)
     return MechPart("claw", [Piece("claw", body, h=0.01, tris=500)],
-                    {"grip": socket("grip", GRIP, 0.0, -0.3, 0.12)})
+                    {"grip": socket("grip", GRIP, 0.42, -0.3, 0.06)})
 
 
 def rifle():
-    """A huge sniper rifle, barrel along -y from the grip: long barrel in a shroud, a big
-    muzzle brake, a long scope on rings, a heavy magazine, a folded bipod and a skeleton stock."""
-    receiver = Box(0.11, 0.55, 0.17, OLIVE, ch=0.05).at(0, -0.25, 0.14)
-    shroud = Cylinder(0.11, 0.7, OLIVE, axis="y", ch=0.03).at(0, -1.45, 0.18)
-    barrel = Cylinder(0.06, 1.0, DARK, axis="y", ch=0.01).at(0, -2.6, 0.18)
-    brake = Union(Box(0.13, 0.22, 0.12, DARK, ch=0.04).at(0, -3.68, 0.18),
-                  *[Box(0.15, 0.025, 0.06, RUBBER, ch=0.01).at(0, -3.6 - 0.07 * k, 0.18) for k in range(3)])
-    scope = Union(Cylinder(0.075, 0.38, DARK, axis="y", ch=0.02).at(0, -0.5, 0.44),
-                  Cylinder(0.09, 0.06, DARK, axis="y", ch=0.02).at(0, -0.9, 0.44),
-                  Cylinder(0.07, 0.01, GLASS, axis="y").at(0, -0.97, 0.44),
-                  Box(0.04, 0.03, 0.08, DARK, ch=0.01).at(0, -0.35, 0.33),
-                  Box(0.04, 0.03, 0.08, DARK, ch=0.01).at(0, -0.7, 0.33))
-    mag = Box(0.08, 0.14, 0.18, DARK, ch=0.03).rot("x", 8).at(0, -0.3, -0.12)
-    bipod = Union(segment((0.05, -1.95, 0.08), (0.08, -1.3, -0.02), 0.022, DARK),
-                  segment((-0.05, -1.95, 0.08), (-0.08, -1.3, -0.02), 0.022, DARK),
-                  Box(0.08, 0.03, 0.04, DARK, ch=0.01).at(0, -1.97, 0.08))
-    stock = Union(Box(0.07, 0.22, 0.05, RUST, ch=0.02).at(0, 0.42, 0.18),
-                  Box(0.07, 0.05, 0.16, RUST, ch=0.02).at(0, 0.62, 0.08),
-                  segment((0, 0.25, 0.05), (0, 0.6, -0.02), 0.03, DARK))
-    grip = Union(Box(0.04, 0.05, 0.1, DARK, ch=0.015).at(0, 0, 0.02), knuckle(GRIP, DARK))
+    """A huge sniper rifle held at its balance point, barrel along -y: a long barrel in a
+    shroud with a big muzzle brake out front, and behind the grip the weight that balances
+    it: a heavy receiver, a battery pack, a drum magazine and a long padded stock."""
+    shroud = Cylinder(0.11, 0.65, OLIVE, axis="y", ch=0.03).at(0, -0.85, 0.16)
+    barrel = Cylinder(0.06, 0.95, DARK, axis="y", ch=0.01).at(0, -2.4, 0.16)
+    brake = Union(Box(0.13, 0.2, 0.12, DARK, ch=0.04).at(0, -3.42, 0.16),
+                  *[Box(0.15, 0.025, 0.06, RUBBER, ch=0.01).at(0, -3.34 - 0.07 * k, 0.16) for k in range(3)])
+    receiver = Box(0.14, 0.5, 0.2, OLIVE, ch=0.06).at(0, 0.35, 0.14)
+    battery = Box(0.15, 0.28, 0.16, DARK, ch=0.04).at(0, 0.45, -0.12)
+    drum = Cylinder(0.16, 0.08, DARK, axis="x", ch=0.03).at(0, 0.12, -0.12)
+    stock = Union(Box(0.09, 0.28, 0.08, RUST, ch=0.03).at(0, 1.05, 0.12),
+                  Box(0.09, 0.08, 0.22, RUST, ch=0.03).at(0, 1.3, 0.04),
+                  segment((0, 0.82, 0.02), (0, 1.25, -0.1), 0.035, DARK))
+    scope = Union(Cylinder(0.075, 0.36, DARK, axis="y", ch=0.02).at(0, 0.1, 0.42),
+                  Cylinder(0.09, 0.06, DARK, axis="y", ch=0.02).at(0, -0.3, 0.42),
+                  Cylinder(0.07, 0.01, GLASS, axis="y").at(0, -0.37, 0.42),
+                  Box(0.04, 0.05, 0.1, DARK, ch=0.01).at(0, 0.3, 0.3),
+                  Box(0.04, 0.05, 0.1, DARK, ch=0.01).at(0, -0.1, 0.3))
+    bipod = Union(segment((0.05, -1.45, 0.06), (0.08, -0.85, -0.04), 0.022, DARK),
+                  segment((-0.05, -1.45, 0.06), (-0.08, -0.85, -0.04), 0.022, DARK),
+                  Box(0.08, 0.03, 0.04, DARK, ch=0.01).at(0, -1.47, 0.06))
+    grip = Union(Box(0.045, 0.06, 0.12, DARK, ch=0.015).at(0, 0, 0.04), knuckle(GRIP, DARK))
     pieces = [Piece("rifle", Union(receiver, shroud, scope, stock), h=0.02, tris=500),
-              Piece("barrel", Union(barrel, brake, mag, bipod, grip), h=0.015, tris=500)]
-    pieces[0].cut(Box(0.12, 0.006, 0.18, OLIVE).at(0, -0.6, 0.14))
+              Piece("barrel", Union(barrel, brake, battery, drum, bipod, grip), h=0.015, tris=550)]
+    pieces[0].cut(Box(0.15, 0.006, 0.21, OLIVE).at(0, 0.3, 0.14))
     return MechPart("rifle", pieces, {})

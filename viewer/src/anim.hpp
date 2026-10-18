@@ -23,7 +23,7 @@ struct EaseSpec {
 };
 
 // smoulder = heat * idle: hot but no longer firing; curve = a named (curve ...) of the anim
-enum class Driver { one, rate, heat, idle, smoulder, curve, speed };
+enum class Driver { one, rate, heat, idle, smoulder, curve, speed, throttle };
 
 struct Drive {
     Driver driver = Driver::one;
@@ -113,6 +113,9 @@ struct Anim {
     float table_dt = 1.0f / 480.0f;
     std::vector<float> rate_table, heat_table, idle_table;
     std::vector<float> speed_table; // the gait's ground speed (m/s), for (by speed k)
+    std::vector<float> throttle_table; // 0..1: opens as it gets moving, closes as it slows
+    std::vector<float> ground_table;   // ground travelled since the loop began (m); empty if standing
+    float ground_total = 0;            // ground travelled over one loop
     Gait gait; // (gait ...): legged locomotion with IK
 };
 

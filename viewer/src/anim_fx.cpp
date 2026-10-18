@@ -51,7 +51,9 @@ void run_wisp(const Anim& a, const Track& t, float now, Pose& out) {
         float w = tau * t.curl_hz;
         float ox = std::sin(w * born + age * 1.7f) + 0.45f * std::sin(w * 2.3f * born + age * 3.1f + 1.0f);
         float oz = std::sin(w * 0.8f * born + 2.0f + age * 1.3f) + 0.35f * std::sin(w * 1.9f * born + age * 2.2f);
-        Vec3 p = base + Vec3{0, t.rise * age + 0.5f * t.accel * age * age, 0} + t.wind * age + Vec3{ox, 0, oz} * amp;
+        // once out, the smoke is left on the ground, which slides back under a walking body
+        float carried = ground_at(a, now) - ground_at(a, now - age);
+        Vec3 p = base + Vec3{0, t.rise * age + 0.5f * t.accel * age * age, -carried} + t.wind * age + Vec3{ox, 0, oz} * amp;
         float alpha = t.alpha * strength * smooth01(age / 0.12f) * std::pow(1 - age / t.life, 1.6f);
         r.pts.push_back(p);
         r.width.push_back(t.size0 + (t.size1 - t.size0) * (1 - std::exp(-age / t.grow)));
@@ -80,7 +82,7 @@ void run_lamp(const Anim& a, const Track& t, float now, Pose& out) {
         float back = t.life * (float)k / (float)n;
         float fade = 1 - (float)k / (float)n;
         FxSprite s;
-        s.pos = sample(t.path_pos, wrap_time(a, now - back));
+        s.pos = sample(t.path_pos, wrap_time(a, now - back)) - Vec3{0, 0, ground_at(a, now) - ground_at(a, now - back)};
         s.size = t.size0 * (k == 0 ? 1.0f : 0.8f);
         s.angle = 0;
         s.color = t.color * (level * fade * fade * (k == 0 ? 1.6f : 0.7f));
