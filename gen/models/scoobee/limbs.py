@@ -50,6 +50,10 @@ def shin():
         # a triangular gusset off the upper back of the shin out to the calf ram's pin
         Prism([(-0.36, -0.12), (-0.98, -0.2), (-0.6, -0.5)], 0.035, DARK, r=0.01, plane="yz"),
         Cylinder(0.045, 0.06, DARK, axis="x", ch=0.01).at(0, -0.6, -0.47),
+        # hinge brackets either end of the calf flap's pin, grown off the shell
+        Box(0.045, 0.035, 0.022, DARK, ch=0.01).at(0.24, -0.62, -0.03),
+        Box(0.045, 0.035, 0.022, DARK, ch=0.01).at(0.24, -0.62, 0.19),
+        Cylinder(0.026, 0.13, CHROME, axis="z", ch=0.006).at(0.27, -0.62, 0.08),
         bolts([(0.04, -0.5, -0.22), (0.04, -0.75, -0.24)], 0.014, axis="x"),
     )
     joints = Union(knuckle(KNEE, DARK, CHROME), housing(ANKLE, DARK).at(*ankle_at),
@@ -170,33 +174,37 @@ def claw():
     thumb = finger((0.09, -0.11, -0.05), 35, -30, (0.08, 0.07), 0.026)
     body = Union(knuckle(WRIST, DARK), palm, *fingers, thumb)
     return MechPart("claw", [Piece("claw", body, h=0.01, tris=500)],
-                    {"grip": socket("grip", GRIP, 0.42, -0.3, 0.06)})
+                    {"grip": socket("grip", GRIP, 0.0, -0.26, 0.1)})
+
+
+RIFLE_X = 0.34  # the gun body rides this far outboard of the hand, joined by the side handle
 
 
 def rifle():
-    """A huge sniper rifle held at its balance point, barrel along -y: a long barrel in a
-    shroud with a big muzzle brake out front, and behind the grip the weight that balances
-    it: a heavy receiver, a battery pack, a drum magazine and a long padded stock."""
-    shroud = Cylinder(0.11, 0.65, OLIVE, axis="y", ch=0.03).at(0, -0.85, 0.16)
-    barrel = Cylinder(0.06, 0.95, DARK, axis="y", ch=0.01).at(0, -2.4, 0.16)
-    brake = Union(Box(0.13, 0.2, 0.12, DARK, ch=0.04).at(0, -3.42, 0.16),
-                  *[Box(0.15, 0.025, 0.06, RUBBER, ch=0.01).at(0, -3.34 - 0.07 * k, 0.16) for k in range(3)])
-    receiver = Box(0.14, 0.5, 0.2, OLIVE, ch=0.06).at(0, 0.35, 0.14)
-    battery = Box(0.15, 0.28, 0.16, DARK, ch=0.04).at(0, 0.45, -0.12)
-    drum = Cylinder(0.16, 0.08, DARK, axis="x", ch=0.03).at(0, 0.12, -0.12)
-    stock = Union(Box(0.09, 0.28, 0.08, RUST, ch=0.03).at(0, 1.05, 0.12),
-                  Box(0.09, 0.08, 0.22, RUST, ch=0.03).at(0, 1.3, 0.04),
-                  segment((0, 0.82, 0.02), (0, 1.25, -0.1), 0.035, DARK))
-    scope = Union(Cylinder(0.075, 0.36, DARK, axis="y", ch=0.02).at(0, 0.1, 0.42),
-                  Cylinder(0.09, 0.06, DARK, axis="y", ch=0.02).at(0, -0.3, 0.42),
-                  Cylinder(0.07, 0.01, GLASS, axis="y").at(0, -0.37, 0.42),
-                  Box(0.04, 0.05, 0.1, DARK, ch=0.01).at(0, 0.3, 0.3),
-                  Box(0.04, 0.05, 0.1, DARK, ch=0.01).at(0, -0.1, 0.3))
-    bipod = Union(segment((0.05, -1.45, 0.06), (0.08, -0.85, -0.04), 0.022, DARK),
-                  segment((-0.05, -1.45, 0.06), (-0.08, -0.85, -0.04), 0.022, DARK),
-                  Box(0.08, 0.03, 0.04, DARK, ch=0.01).at(0, -1.47, 0.06))
-    grip = Union(Box(0.045, 0.06, 0.12, DARK, ch=0.015).at(0, 0, 0.04), knuckle(GRIP, DARK))
-    pieces = [Piece("rifle", Union(receiver, shroud, scope, stock), h=0.02, tris=500),
-              Piece("barrel", Union(barrel, brake, battery, drum, bipod, grip), h=0.015, tris=550)]
-    pieces[0].cut(Box(0.15, 0.006, 0.21, OLIVE).at(0, 0.3, 0.14))
+    """A big mech rifle, sized for a five-metre walker. The hand closes round a thick side
+    handle at the origin; the handle's bracket carries the gun outboard, beside the forearm.
+    One flowing body: a lofted receiver that runs back into a stock that thins at the wrist and
+    flares to the butt, the magazine and battery blended into its underside; forward, a
+    tapering vented shroud, a long barrel and a ported brake. Barrel along -y."""
+    x = RIFLE_X
+    handle = Union(knuckle(GRIP, DARK), segment((0, 0, -0.08), (0, 0, 0.1), 0.05, DARK),
+                   Box(x * 0.5, 0.07, 0.05, DARK, ch=0.02).at(x * 0.5, 0, 0.1))
+    # stations run butt (+y) to the front of the receiver (-y): half width, half depth, lift
+    body = Loft([(1.6, 0.1, 0.17, 0.02), (1.45, 0.1, 0.16, 0.04), (1.05, 0.075, 0.11, 0.1), (0.75, 0.1, 0.13, 0.11),
+                 (0.45, 0.15, 0.2, 0.12), (-0.2, 0.15, 0.2, 0.12), (-0.6, 0.13, 0.17, 0.13)], OLIVE).at(x, 0, 0)
+    under = Union(Box(0.085, 0.13, 0.17, DARK, ch=0.04).rot("x", 12).at(x, -0.38, -0.12),
+                  Box(0.11, 0.24, 0.1, DARK, ch=0.05).at(x, 0.52, -0.05))
+    body = sdf.Union(body, under, k=0.06)
+    body = sdf.Paint(body, Box(0.2, 0.06, 0.4, DARK).at(x, 1.6, 0.0), DARK)  # butt pad
+    shroud = Loft([(-0.55, 0.11, 0.13, 0.12), (-1.4, 0.1, 0.12, 0.12), (-2.0, 0.085, 0.1, 0.12)], OLIVE).at(x, 0, 0)
+    for k in range(6):
+        shroud = sdf.Cut(shroud, Box(0.15, 0.045, 0.04, OLIVE).at(x, -0.85 - 0.17 * k, 0.17), k=0.012)
+    barrel = Cylinder(0.07, 0.85, DARK, axis="y", ch=0.01).at(x, -2.8, 0.12)
+    brake = Cylinder(0.11, 0.14, DARK, axis="y", ch=0.03).at(x, -3.72, 0.12)
+    for k in range(3):
+        brake = sdf.Cut(brake, Box(0.16, 0.025, 0.05, DARK).at(x, -3.64 - 0.06 * k, 0.12))
+    pieces = [Piece("rifle", Union(body, shroud), h=0.018, tris=900, mesher="contour"),
+              Piece("barrel", Union(handle, barrel, brake), h=0.015, tris=400, mesher="contour")]
+    pieces[0].cut(Box(0.16, 0.006, 0.21, OLIVE).at(x, 0.2, 0.12))
+    pieces[0].cut(Box(0.16, 0.006, 0.21, OLIVE).at(x, -0.45, 0.12))
     return MechPart("rifle", pieces, {})

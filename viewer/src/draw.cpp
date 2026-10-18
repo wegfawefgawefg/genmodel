@@ -25,11 +25,14 @@ out vec3 v_nrm;
 out vec3 v_view_pos;
 out vec2 v_uv;
 out vec3 v_glow;
+out vec3 v_world;
 flat out float v_layer;
 void main() {
     int part = int(a_part + 0.5);
     mat4 bone = u_bones[part];
-    vec4 vp = u_view * (bone * vec4(a_pos, 1.0));
+    vec4 wp = bone * vec4(a_pos, 1.0);
+    v_world = wp.xyz;
+    vec4 vp = u_view * wp;
     v_view_pos = vp.xyz;
     v_nrm = mat3(u_view) * (mat3(bone) * a_nrm);
     v_layer = a_layer;
@@ -45,7 +48,27 @@ in vec3 v_nrm;
 in vec3 v_view_pos;
 in vec2 v_uv;
 in vec3 v_glow;
+in vec3 v_world;
 flat in float v_layer;
+uniform mat4 u_view;
+uniform mat4 u_light_vp;
+uniform sampler2D u_shadow;
+uniform int u_moody;
+uniform vec3 u_key_world;
+
+// how lit by the key light: 1 in the open, 0 in shadow (3x3 filtered)
+float key_visible(vec3 n_world) {
+    vec4 lp = u_light_vp * vec4(v_world, 1.0);
+    vec3 p = lp.xyz / lp.w * 0.5 + 0.5;
+    if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
+    float bias = 0.002 + 0.004 * (1.0 - abs(dot(n_world, u_key_world)));
+    vec2 texel = 1.0 / vec2(textureSize(u_shadow, 0));
+    float lit = 0.0;
+    for (int y = -1; y <= 1; y++)
+        for (int x = -1; x <= 1; x++)
+            lit += (p.z - bias <= texture(u_shadow, p.xy + vec2(x, y) * texel * 1.5).r) ? 1.0 : 0.0;
+    return lit / 9.0;
+}
 uniform sampler2D u_tex;
 uniform sampler2D u_tile0, u_tile1, u_tile2;
 uniform sampler2D u_env;
@@ -92,12 +115,25 @@ void main() {
     vec3 key_col = vec3(1.0, 0.96, 0.9) * 2.4;
     vec3 fill_col = vec3(0.35, 0.5, 0.7) * 0.7;
     vec3 rim_col = vec3(0.6, 0.9, 1.0) * 1.1;
+    float shade_key = 1.0;
+    if (u_moody == 1) {
+        // one hard warm key from high above, fixed in the world; a faint cool bounce from
+        // below-behind; a thin rim; almost no ambient
+        mat3 to_view = mat3(u_view);
+        key_dir = normalize(to_view * u_key_world);
+        fill_dir = normalize(to_view * normalize(vec3(-0.5, -0.35, -0.6)));
+        key_col = vec3(1.0, 0.92, 0.8) * 4.6;
+        fill_col = vec3(0.3, 0.42, 0.6) * 0.1;
+        rim_col = vec3(0.6, 0.8, 1.0) * 0.55;
+        shade_key = key_visible(normalize(transpose(to_view) * n));
+    }
 
     // hemisphere ambient, sky above and dark floor below
     float up = n.y * 0.5 + 0.5;
     vec3 ambient = mix(vec3(0.05, 0.05, 0.06), vec3(0.22, 0.25, 0.3), up);
+    if (u_moody == 1) ambient = mix(vec3(0.003, 0.003, 0.004), vec3(0.022, 0.025, 0.03), up);
 
-    float nk = max(dot(n, key_dir), 0.0);
+    float nk = max(dot(n, key_dir), 0.0) * shade_key;
     float nf = max(dot(n, fill_dir), 0.0);
     vec3 diffuse = albedo * (ambient + key_col * nk + fill_col * nf);
 
@@ -113,6 +149,7 @@ void main() {
     vec3 r = reflect(-eye, n);
     float m = 2.0 * sqrt(r.x * r.x + r.y * r.y + (r.z + 1.0) * (r.z + 1.0));
     vec3 env = pow(texture(u_env, r.xy / m + 0.5).rgb, vec3(2.2));
+    if (u_moody == 1) env *= 0.25 + 0.75 * shade_key; // reflections dim in shadow too
     float grazing = pow(1.0 - max(dot(n, eye), 0.0), 2.0);
     col = col * (1.0 - 0.25 * u_reflect * shine) + env * u_reflect * (0.08 + 1.4 * pow(shine, 1.5)) * (0.5 + 0.5 * grazing) * mix(vec3(1.0), albedo * 2.5 + 0.2, 0.3);
     // heat and lamps: emissive on top of the lighting; dark metal shows heat most,
@@ -120,9 +157,21 @@ void main() {
     float dark = 1.0 - clamp(dot(albedo, vec3(0.33)) * 3.0, 0.0, 1.0);
     vec3 emit = v_glow * (0.12 + 0.88 * dark * dark);
     col = col * (1.0 - clamp(dot(emit, vec3(0.6)), 0.0, 0.85)) + emit;
+    if (u_moody == 1) {
+        // gentler highlight roll-off, then an S-curve: lit tops stay bright, shadows go deep
+        col = col / (1.0 + col * 0.12);
+        vec3 g = clamp(pow(col, vec3(1.0 / 2.2)), 0.0, 1.0);
+        g = mix(g, g * g * (3.0 - 2.0 * g), 0.55);
+        o_color = vec4(g, 1.0);
+        return;
+    }
     col = col / (1.0 + col * 0.25);
     o_color = vec4(pow(col, vec3(1.0 / 2.2)), 1.0);
 }
+)";
+
+const char* depth_fs = R"(#version 330 core
+void main() {}
 )";
 
 // full-screen gradient behind the model
@@ -166,6 +215,9 @@ uniform float u_scroll;
 uniform float u_period;
 uniform float u_size;
 uniform vec3 u_center;
+uniform mat4 u_light_vp;
+uniform sampler2D u_shadow;
+uniform int u_moody;
 out vec4 o_color;
 float line(float x, float w) {
     float f = abs(fract(x) - 0.5);
@@ -178,6 +230,20 @@ void main() {
     float d = length(v_world.xz - u_center.xz) / u_size;
     float fade = 1.0 - smoothstep(0.25, 0.95, d);
     vec3 c = vec3(0.16, 0.16, 0.15) + vec3(0.12) * max(g, fine);
+    if (u_moody == 1) {
+        vec4 lp = u_light_vp * vec4(v_world, 1.0);
+        vec3 sp = lp.xyz / lp.w * 0.5 + 0.5;
+        float lit = 1.0;
+        if (sp.x > 0.0 && sp.x < 1.0 && sp.y > 0.0 && sp.y < 1.0) {
+            vec2 texel = 1.0 / vec2(textureSize(u_shadow, 0));
+            lit = 0.0;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                    lit += (sp.z - 0.003 <= texture(u_shadow, sp.xy + vec2(x, y) * texel * 2.0).r) ? 1.0 : 0.0;
+            lit /= 9.0;
+        }
+        c *= (0.25 + 0.75 * lit) * 0.75;
+    }
     o_color = vec4(mix(vec3(0.03, 0.032, 0.036), pow(c, vec3(1.0 / 2.2)), fade), 1.0);
 }
 )";
@@ -230,6 +296,26 @@ void mat_perspective(float* m, float fovy, float aspect, float near_z, float far
     m[10] = (far_z + near_z) / (near_z - far_z);
     m[11] = -1.0f;
     m[14] = 2.0f * far_z * near_z / (near_z - far_z);
+}
+
+void mat_ortho(float* m, float r, float near_z, float far_z) {
+    memset(m, 0, 16 * sizeof(float));
+    m[0] = 1.0f / r;
+    m[5] = 1.0f / r;
+    m[10] = -2.0f / (far_z - near_z);
+    m[14] = -(far_z + near_z) / (far_z - near_z);
+    m[15] = 1.0f;
+}
+
+void mat_mul(float* out, const float* a, const float* b) {
+    float r[16];
+    for (int c = 0; c < 4; c++)
+        for (int row = 0; row < 4; row++) {
+            float s = 0;
+            for (int k = 0; k < 4; k++) s += a[k * 4 + row] * b[c * 4 + k];
+            r[c * 4 + row] = s;
+        }
+    memcpy(out, r, sizeof(r));
 }
 
 // view matrix looking from eye at target with +Y up
@@ -324,6 +410,21 @@ bool gpu_init(Gpu& gpu) {
     glGenBuffers(1, &gpu.ibo);
     glGenTextures(1, &gpu.texture);
     gpu.ground_program = link(ground_vs, ground_fs);
+    gpu.shadow_program = link(model_vs, depth_fs);
+    const int shadow_size = 2048;
+    glGenTextures(1, &gpu.shadow_tex);
+    glBindTexture(GL_TEXTURE_2D, gpu.shadow_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, shadow_size, shadow_size, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glGenFramebuffers(1, &gpu.shadow_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, gpu.shadow_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, gpu.shadow_tex, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     make_env(gpu);
     return fx_init(gpu);
 }
@@ -392,7 +493,42 @@ void gpu_upload(Gpu& gpu, Model& model, const Rig& rig) {
     gpu.radius = model.radius;
 }
 
+// the key light's depth map: the model seen from high above, so it can shade itself and the ground
+static void shadow_pass(const Gpu& gpu, const Pose& pose, Vec3 key, float* light_vp) {
+    GLint prev = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev);
+    float r = gpu.radius * 1.6f;
+    float target[3] = {gpu.center[0], gpu.center[1], gpu.center[2]};
+    float eye[3] = {target[0] + key.x * gpu.radius * 3, target[1] + key.y * gpu.radius * 3, target[2] + key.z * gpu.radius * 3};
+    float view[16], proj[16];
+    mat_look_at(view, eye, target);
+    mat_ortho(proj, r, 0.05f, gpu.radius * 7);
+    mat_mul(light_vp, proj, view);
+    glBindFramebuffer(GL_FRAMEBUFFER, gpu.shadow_fbo);
+    glViewport(0, 0, 2048, 2048);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glUseProgram(gpu.shadow_program);
+    glUniformMatrix4fv(glGetUniformLocation(gpu.shadow_program, "u_view"), 1, GL_FALSE, view);
+    glUniformMatrix4fv(glGetUniformLocation(gpu.shadow_program, "u_proj"), 1, GL_FALSE, proj);
+    int n_bones = std::min((int)pose.bones.size(), max_parts);
+    glUniformMatrix4fv(glGetUniformLocation(gpu.shadow_program, "u_bones"), n_bones, GL_FALSE, pose.bones[0].m);
+    glBindVertexArray(gpu.vao);
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(2.0f, 4.0f);
+    glDrawElements(GL_TRIANGLES, gpu.additive_first, GL_UNSIGNED_INT, nullptr);
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, prev);
+}
+
 void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const Pose& pose, int width, int height) {
+    Vec3 key = norm(Vec3{0.38f, 1.0f, 0.28f});
+    float light_vp[16];
+    if (opt.moody) {
+        shadow_pass(gpu, pose, key, light_vp);
+    }
     glViewport(0, 0, width, height);
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -443,6 +579,14 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const P
     glBindTexture(GL_TEXTURE_2D, gpu.env);
     glUniform1i(glGetUniformLocation(gpu.program, "u_env"), 4);
     glUniform1f(glGetUniformLocation(gpu.program, "u_reflect"), opt.reflect);
+    glUniform1i(glGetUniformLocation(gpu.program, "u_moody"), opt.moody ? 1 : 0);
+    glUniform3f(glGetUniformLocation(gpu.program, "u_key_world"), key.x, key.y, key.z);
+    if (opt.moody) {
+        glUniformMatrix4fv(glGetUniformLocation(gpu.program, "u_light_vp"), 1, GL_FALSE, light_vp);
+        glActiveTexture(GL_TEXTURE5);
+        glBindTexture(GL_TEXTURE_2D, gpu.shadow_tex);
+        glUniform1i(glGetUniformLocation(gpu.program, "u_shadow"), 5);
+    }
     const char* tile_names[3] = {"u_tile0", "u_tile1", "u_tile2"};
     for (int i = 0; i < 3; i++) {
         glActiveTexture(GL_TEXTURE1 + i);
@@ -463,6 +607,14 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const P
         glUniform1f(glGetUniformLocation(gpu.ground_program, "u_scroll"), pose.ground);
         glUniform1f(glGetUniformLocation(gpu.ground_program, "u_period"), pose.ground_period);
         glUniform3f(glGetUniformLocation(gpu.ground_program, "u_center"), gpu.center[0], 0, gpu.center[2]);
+        glUniform1i(glGetUniformLocation(gpu.ground_program, "u_moody"), opt.moody ? 1 : 0);
+        if (opt.moody) {
+            glUniformMatrix4fv(glGetUniformLocation(gpu.ground_program, "u_light_vp"), 1, GL_FALSE, light_vp);
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, gpu.shadow_tex);
+            glUniform1i(glGetUniformLocation(gpu.ground_program, "u_shadow"), 5);
+            glActiveTexture(GL_TEXTURE0);
+        }
         glBindVertexArray(gpu.empty_vao);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glUseProgram(gpu.program);

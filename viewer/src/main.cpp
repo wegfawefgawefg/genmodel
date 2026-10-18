@@ -71,6 +71,8 @@ static bool parse_args(int argc, char** argv, Args& a) {
             a.opt.wire = true;
         } else if (s == "--clay") {
             a.opt.flat = true;
+        } else if (s == "--studio") {
+            a.opt.moody = false;
         } else if (s == "--reflect" && has_next) {
             a.opt.reflect = (float)atof(argv[++i]);
         } else if (s == "--uv") {
@@ -190,7 +192,7 @@ static int run_window(const Args& a, Asset& asset) {
     bool muted = false;
     printf("drag: orbit   right drag: pan   wheel: zoom   W: wire   C: clay   U: uvs\n"
            "space: spin   R: reset view   P: pause   , .: step   [ ]: slower/faster   M: mute\n"
-           "E: fake reflections on/off\n"
+           "E: fake reflections on/off   L: dramatic / studio light\n"
            "Esc: quit\n"
            "(reloads when the model or animation files change)\n");
 
@@ -250,7 +252,9 @@ static int run_window(const Args& a, Asset& asset) {
                 } else if (k == SDLK_M) {
                     muted = !muted;
                 } else if (k == SDLK_E) {
-                    opt.reflect = opt.reflect > 0 ? 0.0f : 0.8f;
+                    opt.reflect = opt.reflect > 0 ? 0.0f : 0.35f;
+                } else if (k == SDLK_L) {
+                    opt.moody = !opt.moody;
                 }
             }
         }

@@ -97,6 +97,10 @@ def back_gear():
         sdf.Torus(0.06, 0.016, CHROME, axis="z").at(0.18, 0.44, -1.63),
         sdf.Torus(0.06, 0.016, CHROME, axis="z").at(-0.18, 0.44, -1.63),
     )
+    # hinge brackets for the flank flaps: lugs off the body either end of each pin
+    flap_mounts = Union(*[Box(0.06, 0.025, 0.035, DARK, ch=0.01).at(sx * 0.53, y, -0.05) for sx in (1, -1) for y in (0.12, -0.12)],
+                        Cylinder(0.022, 0.13, CHROME, axis="y", ch=0.006).at(0.58, 0, -0.05),
+                        Cylinder(0.022, 0.13, CHROME, axis="y", ch=0.006).at(-0.58, 0, -0.05))
     vents = Union(
         Box(0.03, 0.12, 0.3, DARK, ch=0.01).at(0.63, 0.42, -0.75),
         Box(0.03, 0.12, 0.3, DARK, ch=0.01).at(-0.63, 0.42, -0.75),
@@ -110,7 +114,7 @@ def back_gear():
         antenna((0.24, 0.78, -1.1), (0.34, 1.55, -2.35), 0.006),
         antenna((-0.32, 0.76, -1.15), (-0.5, 1.85, -2.6), 0.007),
     )
-    return Union(stacks, lamps, vents, whips)
+    return Union(stacks, lamps, vents, whips, flap_mounts)
 
 
 def torso():

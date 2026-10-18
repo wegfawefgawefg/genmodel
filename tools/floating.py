@@ -70,6 +70,21 @@ def main():
                 found += 1
                 print(f"  {part:16} piece of {int((face_lab == p).sum()):4d} tris at ({c[0]:+.2f} {c[1]:+.2f} {c[2]:+.2f}) "
                       f"floats {d.min() * 100:.1f} cm off")
+    # every part must touch the part it hangs from (rig parents), or it floats as a whole
+    parent = {}
+    for line in open(os.path.join(ROOT, "out", name, name + ".rig.sexp")):
+        f = line.replace("(", " ").replace(")", " ").split()
+        if f and f[0] == "part" and "parent" in f:
+            parent[f[1]] = f[f.index("parent") + 1]
+    cloud = {p: sample(verts, fp, 0.012) for p, fp in parts.items()}
+    for child, par in sorted(parent.items()):
+        if child not in cloud or par not in cloud:
+            continue
+        d, _ = cKDTree(cloud[par]).query(cloud[child], k=1)
+        if d.min() > gap:
+            found += 1
+            c = cloud[child].mean(0)
+            print(f"  {child:16} hangs {d.min() * 100:.1f} cm off its parent {par} (at {c[0]:+.2f} {c[1]:+.2f} {c[2]:+.2f})")
     print(f"{found} floating pieces")
 
 

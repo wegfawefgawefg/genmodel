@@ -33,7 +33,7 @@
   (part upper_arm_r (model upper_arm) (on torso shoulder_r) (turn x -14 z 28))
   (part forearm_r (model forearm) (on upper_arm_r elbow) (turn x 12 z -8))
   (part claw_r (model claw) (on forearm_r wrist) (turn x -10))
-  (part rifle (on claw_r grip) (turn x 4))
+  (part rifle (on claw_r grip) (turn x 0))
   (part upper_arm_l (model upper_arm) (on torso shoulder_l) (mirror) (turn x -8 z -28))
   (part forearm_l (model forearm) (on upper_arm_l elbow) (mirror) (turn x 28 z 16))
   (part claw_l (model claw) (on forearm_l wrist) (mirror) (turn x 15))

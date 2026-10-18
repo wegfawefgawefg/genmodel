@@ -29,6 +29,7 @@ struct Gpu {
     uint32_t tiles[3] = {0, 0, 0}; // repeating tile textures (material layers 1-3)
     uint32_t ground_program = 0;
     uint32_t env = 0; // sphere-mapped fake reflection
+    uint32_t shadow_fbo = 0, shadow_tex = 0, shadow_program = 0; // the key light's depth map
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };
@@ -37,7 +38,8 @@ struct DrawOptions {
     bool wire = false;    // wireframe over the shaded model
     bool flat = false;    // ignore the texture, show grey clay
     bool show_uv = false; // show the uv layout as a checker
-    float reflect = 0.8f;  // the fake environment reflection's strength (E toggles it)
+    float reflect = 0.35f; // the fake environment reflection's strength (E toggles it)
+    bool moody = true;     // one hard key light from above with shadows; false: even studio light (L)
 };
 
 const int max_parts = 128;
