@@ -38,6 +38,11 @@ float ease_one(Ease e, float t) {
     }
     case Ease::spring:
         return 1 - std::exp(-6 * t) * std::cos(15 * t);
+    case Ease::critical: {
+        // a critically damped spring let go from rest: starts slow, settles, never overshoots
+        const float k = 6.0f;
+        return (1 - (1 + k * t) * std::exp(-k * t)) / (1 - (1 + k) * std::exp(-k));
+    }
     }
     return t;
 }

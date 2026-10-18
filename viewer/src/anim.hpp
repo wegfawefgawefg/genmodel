@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-enum class Ease { linear, smooth, expo_in, expo_out, expo_inout, superexp, back, spring };
+enum class Ease { linear, smooth, expo_in, expo_out, expo_inout, superexp, back, spring, critical };
 
 // an ease, optionally blended with a second one: (mix expo-out back 0.3)
 struct EaseSpec {

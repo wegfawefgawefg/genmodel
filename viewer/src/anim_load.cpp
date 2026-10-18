@@ -16,6 +16,7 @@ Ease ease_named(const std::string& s) {
     if (s == "superexp") return Ease::superexp;
     if (s == "back") return Ease::back;
     if (s == "spring") return Ease::spring;
+    if (s == "critical") return Ease::critical;
     return Ease::linear;
 }
 

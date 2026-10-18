@@ -22,7 +22,8 @@
 ; (hum cue (by driver k) (pitch lo hi) (gain g))  a looping cue whose level and pitch follow
 ; drivers: rate (shots/s), heat, idle (1 when not firing), smoulder (heat * idle: hot, settled),
 ;   or any (curve name (seg t0 t1 from to ease)...) defined here
-; eases: linear smooth expo-in expo-out expo-inout superexp back spring, or (mix a b w)
+; eases: linear smooth expo-in expo-out expo-inout superexp back spring critical, or (mix a b w)
+;   critical: a critically damped return (starts from rest, settles, never overshoots)
 
 (anim liedersanger
   (length 9.0)
@@ -53,38 +54,40 @@
   ; the gunner braces as the trigger goes, then eases off as the burst ends
   (kick root (at 1.05) (move 0.02 -0.015 0) (rot 0 0 1 1.8) (attack 0.15 expo-out) (release 5.6 smooth))
 
-  ; the barrels take turns: even shots fire the top one. Each slams back a long way
-  ; and comes home on a soft spring, overshooting forward once.
+  ; the barrels take turns: even shots fire the top one. Each slams back a long way,
+  ; most of it at once and the rest braking hard, then the buffer spring eases it home
+  ; (critically damped: no overshoot) before that barrel fires again
   (on-shot (every 2 0)
-    (kick upper_barrel (move 0.24 0 0) (attack 0.014 expo-out) (release 0.62 spring 5 0.32) (vary 0.1))
-    (kick upper_barrel_spring.* (move 0.24 0 0) (spread 1 0.04) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
+    (kick upper_barrel (move 0.34 0 0) (attack 0.045 expo-out) (release 0.2 critical) (vary 0.06))
+    (kick upper_barrel_spring.* (move 0.34 0 0) (spread 1 0.04) (attack 0.045 expo-out) (release 0.2 critical))
     ; low-poly models paint the coil on a sleeve: slide its texture instead
-    (kick upper_barrel_sleeve (uv 0 1.4) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
+    (kick upper_barrel_sleeve (uv 0 2.0) (attack 0.045 expo-out) (release 0.2 critical))
     (kick upper_barrel_flash (scale 1.35) (attack 0.004 linear) (release 0.1 expo-in) (vary 0.3) (roll 1 0 0 14)))
   (on-shot (every 2 1)
-    (kick lower_barrel (move 0.24 0 0) (attack 0.014 expo-out) (release 0.62 spring 5 0.32) (vary 0.1))
-    (kick lower_barrel_spring.* (move 0.24 0 0) (spread 1 0.04) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
-    (kick lower_barrel_sleeve (uv 0 1.4) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
+    (kick lower_barrel (move 0.34 0 0) (attack 0.045 expo-out) (release 0.2 critical) (vary 0.06))
+    (kick lower_barrel_spring.* (move 0.34 0 0) (spread 1 0.04) (attack 0.045 expo-out) (release 0.2 critical))
+    (kick lower_barrel_sleeve (uv 0 2.0) (attack 0.045 expo-out) (release 0.2 critical))
     (kick lower_barrel_flash (scale 1.35) (attack 0.004 linear) (release 0.1 expo-in) (vary 0.3) (roll 1 0 0 14)))
 
-  ; every shot throws the whole gun back and up, then it fights its way down again
+  ; every shot shoves the whole gun straight back (it's heavy: little rotation), and
+  ; it eases forward again without bouncing
   (on-shot
-    (kick root (move 0.075 0.012 0) (rot 0 0 1 -3.2) (attack 0.02 expo-out) (release 0.6 spring 2.6 0.38) (vary 0.2))
-    (kick root (rot 1 0 0 0.9) (attack 0.03 expo-out) (release 0.5 spring 3.3 0.3) (vary 0.9))
-    (kick cover (rot 0 0 1 -10) (attack 0.012 expo-out) (release 0.2 spring 12 0.35))
-    (step gear (rot 0 0 1 -20) (over 0.08 (mix expo-out back 0.7)))
-    (step drum_face (rot 0.866 0.5 0 -12) (over 0.11 back))
-    (feed belt (over 0.075 (mix expo-out back 0.45)))
+    (kick root (move 0.1 0.004 0) (rot 0 0 1 -0.8) (attack 0.05 expo-out) (release 0.32 critical) (vary 0.15))
+    (kick root (rot 1 0 0 0.2) (attack 0.05 expo-out) (release 0.3 critical) (vary 0.9))
+    (kick cover (rot 0 0 1 -6) (attack 0.03 expo-out) (release 0.15 critical))
+    (step gear (rot 0 0 1 -20) (over 0.08 expo-out))
+    (step drum_face (rot 0.866 0.5 0 -12) (over 0.11 expo-out))
+    (feed belt (over 0.075 expo-out))
     ; the belt is yanked taut, then its weight swings it back out
-    (kick belt_h1 (move 0.05 -0.04 -0.1) (attack 0.025 expo-out) (release 0.9 spring 2.2 0.2))
-    (kick belt_h2 (move -0.01 -0.02 -0.03) (attack 0.02 expo-out) (release 0.6 spring 3 0.25))
-    (kick drum (rot 1 0 0 2.2) (move 0 -0.012 0) (attack 0.03 expo-out) (release 1.1 spring 2 0.17) (vary 0.35))
+    (kick belt_h1 (move 0.05 -0.04 -0.1) (attack 0.03 expo-out) (release 0.8 spring 2.2 0.45))
+    (kick belt_h2 (move -0.01 -0.02 -0.03) (attack 0.025 expo-out) (release 0.6 spring 3 0.5))
+    (kick drum (rot 1 0 0 1.4) (move 0 -0.01 0) (attack 0.05 expo-out) (release 0.9 spring 1.6 0.5) (vary 0.3))
     (kick lens (glow 3 0.5 0.25) (attack 0.002 linear) (release 0.12 expo-out))
     (throw case.* (vel 0.5 1.35 1.05) (jitter 0.2 0.3 0.3) (gravity -4) (spin 900) (life 1.25)))
 
   ; sustained fire walks the muzzle up and rattles everything
-  (lean root (by rate 0.11) (rot 0 0 1 -1) (move 0.002 0 0))
-  (shake root (by rate 0.0006) (freq 17) (move 0.6 1 0.5) (rot 0 0 1 18))
+  (lean root (by rate 0.11) (rot 0 0 1 -0.35) (move 0.006 0 0))
+  (shake root (by rate 0.0005) (freq 17) (move 0.8 0.6 0.4) (rot 0 0 1 6))
   (shake drum (by rate 0.12) (freq 5) (rot 1 0 0 1.4))
   (shake belt_h1 belt_h2 (by rate 0.004) (freq 4) (move 1 1 1.4))
 
