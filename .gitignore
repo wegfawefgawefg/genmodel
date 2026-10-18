@@ -8,3 +8,6 @@ ref/*.jpg
 .vscode/
 out/test/
 ref/sounds/
+.cache/
+# clips cut from ref/sounds (third-party), rebuilt by tools/sounds.py
+out/*/sounds/
