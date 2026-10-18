@@ -33,7 +33,7 @@
     (seg 1.2 1.7 5 8 expo-out)
     (seg 1.7 6.0 8 8)
     (seg 6.0 7.0 8 0 expo-out))
-  (heat (gain 0.07) (cool 1.9))
+  (heat (gain 0.05) (cool 1.9))
 
   ; the motor snaps up to speed with the trigger and spins down after the last shot
   (curve spin
@@ -96,9 +96,9 @@
 
   ; heat soaks into the barrels and bleeds away slowly:
   ; dull red first, then orange-yellow only when it is really cooking
-  (glow upper_barrel lower_barrel (by heat 1.0 expo-in) (glow 1.0 0.05 0.0))
-  (glow upper_barrel lower_barrel (by heat 0.9 superexp) (glow 0.7 0.3 0.04))
-  (glow upper_barrel_spring.* lower_barrel_spring.* (by heat 0.9 expo-in) (glow 0.85 0.04 0.0))
+  (glow upper_barrel lower_barrel (by heat 1.0 expo-in) (glow 0.55 0.03 0.0))
+  (glow upper_barrel lower_barrel (by heat 0.9 superexp) (glow 0.3 0.1 0.01))
+  (glow upper_barrel_spring.* lower_barrel_spring.* (by heat 0.9 expo-in) (glow 0.45 0.02 0.0))
 
   ; blast smoke and sparks from each muzzle brake
   (on-shot (every 2 0)

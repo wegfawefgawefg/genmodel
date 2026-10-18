@@ -108,7 +108,7 @@ void main() {
     // heat and lamps: emissive on top of the lighting; dark metal shows heat most,
     // and a hot part's own lighting fades under the glow
     float dark = 1.0 - clamp(dot(albedo, vec3(0.33)) * 3.0, 0.0, 1.0);
-    vec3 emit = v_glow * (0.35 + 0.65 * dark);
+    vec3 emit = v_glow * (0.12 + 0.88 * dark * dark);
     col = col * (1.0 - clamp(dot(emit, vec3(0.6)), 0.0, 0.85)) + emit;
     col = col / (1.0 + col * 0.25);
     o_color = vec4(pow(col, vec3(1.0 / 2.2)), 1.0);

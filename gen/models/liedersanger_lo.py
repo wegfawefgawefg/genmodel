@@ -166,7 +166,8 @@ def belt():
 
 
 def casings():
-    case = Cylinder(0.1, 0.26, BRASS, ch=0.03)
+    # sized like the rounds on the belt (about a unit long)
+    case = Union(Cylinder(0.13, 0.46, BRASS, ch=0.03), Cylinder(0.15, 0.04, BRASS, ch=0.02).at(0.44, 0, 0))
     return instanced("casings", case, [translate(*PORT) for _ in range(N_CASES)], h=0.02, tris=16,
                      part="case", part_each=True, free=True)
 

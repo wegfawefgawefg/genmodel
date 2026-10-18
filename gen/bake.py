@@ -185,7 +185,7 @@ def shade(scene, p, n, unit, piece, texel):
         streak = fbm(p * np.array([1, 0.08, 1], F) / (unit * 1.5), 3, seed=57)
         drip = smoothstep(0.1, -0.6, n[:, 1]) * 0.25 + (1 - ao_near) * 0.5
         want = patch + 0.55 * crease + drip + 0.45 * streak * smoothstep(0.3, 0.7, region) + 0.6 * chip
-        amount = smoothstep(0.95, 1.35, want + region * 0.5) * rust_mat * scene.rust * (0.12 if st else 1.0)
+        amount = smoothstep(0.95, 1.35, want + region * 0.5) * rust_mat * scene.rust * (st.get("rust", 0.12) if st else 1.0)
         rust_col = to_lin((66, 32, 16)) * (1 - fine[:, None]) + to_lin((150, 72, 30)) * fine[:, None]
         col = col * (1 - amount[:, None]) + rust_col * amount[:, None]
         spec = spec * (1 - 0.8 * amount)

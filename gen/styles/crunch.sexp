@@ -10,6 +10,7 @@
 ; (rust-specks k)   share of texels that turn rust orange, more on edges and in creases
 ; (chips k)         white chips on convex edges
 ; (grime k)         scales the soft grime and occlusion
+; (rust k)          scales the model's rust patches (default 0.12 in a style)
 ; (cool-edges k)    blue-white sheen on upward-facing bevels
 ; (palette (material r g b) ...)  repaints materials by name
 

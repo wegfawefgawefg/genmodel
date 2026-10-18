@@ -94,7 +94,7 @@ def load_style(name):
     for key in ("facets", "texture"):
         if field(form, key):
             st[key] = int(field(form, key)[0])
-    for key in ("tris", "voxel", "grain", "grain-tint", "rust-specks", "chips", "grime", "cool-edges"):
+    for key in ("tris", "voxel", "grain", "grain-tint", "rust-specks", "chips", "grime", "cool-edges", "rust"):
         if field(form, key):
             st[key] = float(field(form, key)[0])
     if field(form, "texture") and len(field(form, "texture")) > 1:
