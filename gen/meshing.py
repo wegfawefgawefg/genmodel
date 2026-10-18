@@ -76,10 +76,18 @@ def project_to_surface(dist, verts, h, steps=2):
 
 
 def decimate(verts, faces, target, aggressiveness=6):
-    s = pyfqmr.Simplify()
-    s.setMesh(verts.astype(np.float64), faces.astype(np.int32))
-    s.simplify_mesh(target_count=int(target), aggressiveness=aggressiveness, preserve_border=True, verbose=False)
-    v, f, _ = s.getMesh()
+    """Quadric decimation to about `target` triangles. One pyfqmr run can stall well above
+    a small target (it runs out of iterations), so run again while it still makes progress."""
+    v, f = verts.astype(np.float64), faces.astype(np.int32)
+    for _ in range(4):
+        s = pyfqmr.Simplify()
+        s.setMesh(v, f)
+        s.simplify_mesh(target_count=int(target), aggressiveness=aggressiveness, preserve_border=True, verbose=False)
+        v2, f2, _ = s.getMesh()
+        progress = len(f2) < len(f) * 0.98
+        v, f = v2, f2
+        if len(f) <= target * 1.05 or not progress:
+            break
     return v.astype(F), f.astype(np.int32)
 
 
@@ -258,5 +266,15 @@ def dual_contour(dist, lo, hi, h):
     t1 = np.where(use02[:, None], q[:, [0, 1, 2]], q[:, [0, 1, 3]])
     t2 = np.where(use02[:, None], q[:, [0, 2, 3]], q[:, [1, 2, 3]])
     faces = np.concatenate([t1, t2]).astype(np.int32)
-    faces = drop_degenerate(x, faces)
-    return x, faces
+    return weld(x, faces, h * 1e-3)
+
+
+def weld(verts, faces, eps):
+    """Merges vertices closer than eps and drops faces that collapse. Unlike dropping
+    every zero-area face, this never opens holes (which stall decimation at their rims)."""
+    key = np.round(verts / eps).astype(np.int64)
+    _, first, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    f = inverse[faces]
+    ok = (f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 0] != f[:, 2])
+    return verts[first], f[ok].astype(np.int32)

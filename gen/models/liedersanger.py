@@ -380,8 +380,9 @@ def decals():
     ]
 
 
-def rig(pieces):
-    """Parts and their pivots. Everything not listed rides root."""
+def rig(pieces, pitch=BELT_PITCH, start=BELT_START):
+    """Parts and their pivots. Everything not listed rides root. Other models with the same
+    layout and piece names (liedersanger_lo) reuse it, so one animation drives them all."""
     up_rear, low_rear = (-1.0, UPPER_Y, UPPER_Z), (-1.0, LOWER_Y, LOWER_Z)
     parts = [
         Part("root", "", (3.5, 0.6, 0.0)),
@@ -396,14 +397,14 @@ def rig(pieces):
         Part("drum_face", "drum", tuple(drum_point(-DRUM_LEN, 0, 0))),
     ]
     by_name = {pc.name: pc for pc in pieces}
-    parts += instance_parts(by_name["upper_barrel_spring"], "root")
-    parts += instance_parts(by_name["lower_barrel_spring"], "root")
-    parts += instance_parts(by_name["casings"], "")
+    for name, parent in (("upper_barrel_spring", "root"), ("lower_barrel_spring", "root"), ("casings", "")):
+        if name in by_name:
+            parts += instance_parts(by_name[name], parent)
     links = instance_parts(by_name["belt"], "root")
     curve = belt_curve()
     parts += links
     parts += [Part("belt_h1", "root", tuple(curve[1])), Part("belt_h2", "root", tuple(curve[2]))]
-    paths = [Path("belt", "root", [tuple(p) for p in curve], [pt.name for pt in links], BELT_PITCH, BELT_START, "drum")]
+    paths = [Path("belt", "root", [tuple(p) for p in curve], [pt.name for pt in links], pitch, start, "drum")]
     return parts, paths
 
 

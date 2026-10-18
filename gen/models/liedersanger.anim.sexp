@@ -5,7 +5,8 @@
 ; (on-shot (every n k) track...)      tracks fired by shots whose index % n == k
 ; (kick parts (move x y z) (rot ax ay az deg) (scale s) (glow r g b)
 ;       (attack secs ease) (release secs ease | release secs spring hz damping) (vary 0..1)
-;       (roll ax ay az deg) (spread first last) (at secs))
+;       (roll ax ay az deg) (spread first last) (at secs) (uv du dv))
+;   uv slides the part's tile texture (coil on a sleeve, rounds on a strip)
 ; (step parts motion (over secs ease))  adds the motion once per shot, eased in
 ; (feed path (over secs ease))          moves the path's links on one pitch per shot
 ; (throw parts (vel x y z) (jitter x y z) (gravity g) (spin deg/s) (life secs))
@@ -57,10 +58,13 @@
   (on-shot (every 2 0)
     (kick upper_barrel (move 0.24 0 0) (attack 0.014 expo-out) (release 0.62 spring 5 0.32) (vary 0.1))
     (kick upper_barrel_spring.* (move 0.24 0 0) (spread 1 0.04) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
+    ; low-poly models paint the coil on a sleeve: slide its texture instead
+    (kick upper_barrel_sleeve (uv 0 1.4) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
     (kick upper_barrel_flash (scale 1.35) (attack 0.004 linear) (release 0.1 expo-in) (vary 0.3) (roll 1 0 0 14)))
   (on-shot (every 2 1)
     (kick lower_barrel (move 0.24 0 0) (attack 0.014 expo-out) (release 0.62 spring 5 0.32) (vary 0.1))
     (kick lower_barrel_spring.* (move 0.24 0 0) (spread 1 0.04) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
+    (kick lower_barrel_sleeve (uv 0 1.4) (attack 0.014 expo-out) (release 0.62 spring 5 0.32))
     (kick lower_barrel_flash (scale 1.35) (attack 0.004 linear) (release 0.1 expo-in) (vary 0.3) (roll 1 0 0 14)))
 
   ; every shot throws the whole gun back and up, then it fights its way down again

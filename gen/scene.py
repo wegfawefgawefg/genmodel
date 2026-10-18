@@ -31,6 +31,8 @@ class Piece:
     part: str = "root"    # rig part that carries it; instanced pieces may give one per copy
     part_each: bool = False  # instanced: copy i belongs to part "<part>.<i>"
     free: bool = False    # moves far from rest (casings, flashes): no culling, casts no AO
+    tile: str = ""        # textured with a repeating tile (Scene.tiles) instead of the atlas
+    tile_uv: object = None  # f(local verts (N, 3)) -> uv (N, 2) for the tile
 
     def cut(self, node, mat=None):
         self.details.append(("cut", node, mat))
@@ -57,11 +59,12 @@ class Piece:
         return n
 
 
-def instanced(name, element, placements, h, tris, part="root", part_each=False, free=False):
-    """A piece made of copies of one element; the body (for baking) is their union."""
+def instanced(name, element, placements, h, tris, part="root", part_each=False, free=False, tile="", tile_uv=None):
+    """A piece made of copies of one element; the body (for baking) is their union. A tile's
+    uv function sees the element's own coordinates, so every copy maps the same way."""
     body = sdf.Union(*[sdf.Xform(element, R, t) for R, t in placements])
     return Piece(name, body, h=h, tris=tris, element=element, placements=placements, part=part,
-                 part_each=part_each, free=free)
+                 part_each=part_each, free=free, tile=tile, tile_uv=tile_uv)
 
 
 @dataclass
@@ -113,6 +116,7 @@ class Scene:
     scale: float = 1.0    # applied at export
     rust: float = 0.0     # weathering for the whole model, 0..1
     style: dict = field(default_factory=dict)  # settings from gen/styles/<name>.sexp
+    tiles: dict = field(default_factory=dict)  # tile name -> rgba PIL image (alpha = spec), repeating
 
     def union_eval(self, p, nodes, pad=0.05):
         """Union of pieces, skipping pieces whose bounds are far from the points."""

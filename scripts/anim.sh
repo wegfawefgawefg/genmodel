@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")/.."
 name="${1:-liedersanger}"
-base="${name%%-*}"  # a styled build (liedersanger-crunch) plays its base model's anim and sounds
+base="${name%%[-_]*}"  # liedersanger-crunch and liedersanger_lo play liedersanger's anim and sounds
 secs="${2:-16}"
 orbit="${3:-16}"
 pitch="${4:-14}"

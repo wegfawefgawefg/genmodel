@@ -61,8 +61,7 @@ void add_targets(const Rig& rig, const std::string& name, std::vector<int>& out)
     }
     int p = find_part(rig, name);
     if (p < 0) {
-        fprintf(stderr, "anim: no part named %s\n", name.c_str());
-        return;
+        return; // this model doesn't have it (one animation can drive several models)
     }
     out.push_back(p);
 }
@@ -79,6 +78,8 @@ void read_motion_field(gsexp::Node c, const std::string& h, Motion& m) {
         m.has_scale = true;
     } else if (h == "glow") {
         m.glow = vec_at(c, 1);
+    } else if (h == "uv") {
+        m.uv = {num(c.child_at(1)), num(c.child_at(2)), 0};
     }
 }
 

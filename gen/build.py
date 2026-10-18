@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import bake
 import export
 import meshing
+import polys
 import sdf
 from sexp import field, parse_sexp
 
@@ -24,30 +25,41 @@ F = np.float32
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def mesh_piece(pc, coarse):
-    """Contour and decimate one piece to its own budget; instanced pieces mesh their
-    element once and copy it."""
+def mesh_element(node, pc, coarse, poly):
+    """(verts, faces) for one node: clean polygons when asked and possible, else contoured
+    and decimated to the piece's budget."""
+    if poly:
+        m = polys.polygonize(node)
+        if m is not None:
+            return m
+        print(f"  {pc.name}: no polygon form (a cut?), contouring instead")
+    lo, hi = node.bounds()
+    v, f = meshing.dual_contour(node.dist, lo, hi, pc.h * coarse)
+    return meshing.decimate(v, f, pc.tris)
+
+
+def mesh_piece(pc, coarse, poly=False):
+    """One piece's (verts, faces, tile uv or None); instanced pieces mesh their element once
+    and copy it, mapping the tile in the element's own coordinates."""
     if pc.element is None:
-        lo, hi = pc.body.bounds()
-        v, f = meshing.dual_contour(pc.body.dist, lo, hi, pc.h * coarse)
-        return meshing.decimate(v, f, pc.tris)
-    lo, hi = pc.element.bounds()
-    v, f = meshing.dual_contour(pc.element.dist, lo, hi, pc.h * coarse)
-    v, f = meshing.decimate(v, f, pc.tris)
-    vs, fs = [], []
-    for i, (R, t) in enumerate(pc.placements):
-        vs.append(v @ R.T + t)
-        fs.append(f + i * len(v))
-    return np.concatenate(vs).astype(F), np.concatenate(fs)
+        v, f = mesh_element(pc.body, pc, coarse, poly)
+        uv = pc.tile_uv(v) if pc.tile else None
+        return v, f, uv
+    v, f = mesh_element(pc.element, pc, coarse, poly)
+    uv = pc.tile_uv(v) if pc.tile else None
+    vs = [v @ R.T + t for R, t in pc.placements]
+    fs = [f + i * len(v) for i in range(len(pc.placements))]
+    uvs = np.tile(uv, (len(pc.placements), 1)) if uv is not None else None
+    return np.concatenate(vs).astype(F), np.concatenate(fs), uvs
 
 
-def mesh_pieces(scene, coarse):
+def mesh_pieces(scene, coarse, poly=False):
     """Mesh every piece, then drop faces buried inside other pieces of the same rigid part
     (a buried face on a moving part could come out into view)."""
     bodies = [(pc.body, *pc.body.bounds()) for pc in scene.pieces]
-    vs, fs, parts, owners, base = [], [], [], [], 0
+    vs, fs, parts, owners, tiles, tile_uv, base = [], [], [], [], [], [], 0
     for i, pc in enumerate(scene.pieces):
-        v, f = mesh_piece(pc, coarse)
+        v, f, uv = mesh_piece(pc, coarse, poly)
         f = meshing.drop_degenerate(v, f)
         others = [bodies[j] for j, o in enumerate(scene.pieces)
                   if j != i and not o.free and not pc.free and not pc.part_each and o.part == pc.part]
@@ -61,6 +73,8 @@ def mesh_pieces(scene, coarse):
         else:
             parts += [pc.part] * len(f)
         owners += [i] * len(f)
+        tiles += [pc.tile] * len(f)
+        tile_uv.append(uv[f] if uv is not None else np.zeros((len(f), 3, 2), F))
         print(f"  {pc.name}: {len(f)} tris")
         vs.append(v)
         fs.append(f + base)
@@ -70,7 +84,7 @@ def mesh_pieces(scene, coarse):
     used = np.unique(f)
     remap = np.full(len(v), -1, np.int32)
     remap[used] = np.arange(len(used))
-    return v[used], remap[f], np.array(parts), np.array(owners)
+    return v[used], remap[f], np.array(parts), np.array(owners), np.array(tiles), np.concatenate(tile_uv)
 
 
 def load_style(name):
@@ -85,6 +99,8 @@ def load_style(name):
             st[key] = float(field(form, key)[0])
     if field(form, "texture") and len(field(form, "texture")) > 1:
         st["filter"] = field(form, "texture")[1]
+    if field(form, "mesher"):
+        st["mesher"] = field(form, "mesher")[0]
     norm = field(form, "normals")
     if norm and norm[0] == "flat":
         st["flat"] = float(norm[1]) if len(norm) > 1 else 20.0
@@ -101,10 +117,13 @@ def main():
     args = ap.parse_args()
 
     t0 = time.time()
-    style = load_style(args.style) if args.style else {}
+    mod = importlib.import_module("models." + args.model)
+    # a model made for a style (STYLE = "lofi") builds in it unless told otherwise
+    native = getattr(mod, "STYLE", None)
+    style_name = args.style or native
+    style = load_style(style_name) if style_name else {}
     # facets must be set before the model builds its primitives
     sdf.FACETS = style.get("facets", 0)
-    mod = importlib.import_module("models." + args.model)
     scene = mod.build()
     scene.style = style
     size = args.tex or (1024 if args.fast else style.get("texture", scene.texture_size))
@@ -115,10 +134,10 @@ def main():
     for m in scene.materials:
         if m.name in style.get("palette", {}):
             m.color = style["palette"][m.name]
-    out_name = args.model + ("-" + args.style if args.style else "")
+    out_name = args.model + ("-" + style_name if style_name and style_name != native else "")
 
     print("meshing")
-    v, f, face_part, face_piece = mesh_pieces(scene, coarse)
+    v, f, face_part, face_piece, face_tile, face_tile_uv = mesh_pieces(scene, coarse, style.get("mesher") == "poly")
     if "flat" in style:
         v, n, f = meshing.crease_split(v, f, crease_deg=style["flat"])
     else:
@@ -132,7 +151,8 @@ def main():
     assert len(f) == n_faces, "atlas changed the face list"
     tex = bake.bake(scene, v, n, f, uv, size, getattr(mod, "UNIT", 0.08), face_piece)
     out_dir = os.path.join(ROOT, "out", out_name)
-    export.write_obj(out_dir, out_name, v * scene.scale, n, uv, f, tex, face_part, style.get("filter", "linear"))
+    export.write_obj(out_dir, out_name, v * scene.scale, n, uv, f, tex, face_part, style.get("filter", "linear"),
+                     face_tile, face_tile_uv, scene.tiles)
     export.write_rig(out_dir, out_name, scene)
     print(f"wrote out/{out_name}/{out_name}.obj  {len(f)} tris, {size}px texture  ({time.time() - t0:.1f}s)")
 

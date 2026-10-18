@@ -43,7 +43,7 @@ float ease_one(Ease e, float t) {
 }
 
 struct Acc {
-    Vec3 move, rot, glow;
+    Vec3 move, rot, glow, uv;
     float scale = 1;
 };
 
@@ -74,6 +74,7 @@ void add(Acc& acc, const Motion& m, float k) {
     acc.rot = acc.rot + m.rot_axis * (m.rot_deg * deg * k);
     acc.scale += m.scale * k;
     acc.glow = acc.glow + m.glow * k;
+    acc.uv = acc.uv + m.uv * k;
 }
 
 float envelope(const Track& t, float tau) {
@@ -228,6 +229,7 @@ float ease(const EaseSpec& e, float t) {
 void rest_pose(const Rig& rig, Pose& out) {
     out.bones.assign(rig.parts.size(), Mat4{});
     out.glow.assign(rig.parts.size(), Vec3{});
+    out.uv.assign(rig.parts.size(), Vec3{});
     out.sprites.clear();
     out.ribbons.clear();
 }
@@ -281,11 +283,13 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
     // parents come before children in the rig file
     out.bones.resize(rig.parts.size());
     out.glow.resize(rig.parts.size());
+    out.uv.resize(rig.parts.size());
     for (size_t i = 0; i < rig.parts.size(); i++) {
         Mat4 local = part_local(rig.parts[i], acc[i]);
         int p = rig.parts[i].parent;
         out.bones[i] = p >= 0 && p < (int)i ? out.bones[p] * local : local;
         out.glow[i] = acc[i].glow;
+        out.uv[i] = acc[i].uv;
     }
     for (size_t i = 0; i < rig.paths.size(); i++) {
         place_links(rig, rig.paths[i], feed[i], out.bones);

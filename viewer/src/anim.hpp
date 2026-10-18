@@ -40,6 +40,7 @@ struct Motion {
     float scale = 0;
     bool has_scale = false;
     Vec3 glow;
+    Vec3 uv; // slides the part's tile texture (x = u, y = v)
 };
 
 enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean, wisp, puff, spark, sound, hum };
@@ -133,6 +134,7 @@ struct FxRibbon {
 struct Pose {
     std::vector<Mat4> bones;
     std::vector<Vec3> glow;
+    std::vector<Vec3> uv; // tile texture offsets per part
     std::vector<FxSprite> sprites;
     std::vector<FxRibbon> ribbons;
 };

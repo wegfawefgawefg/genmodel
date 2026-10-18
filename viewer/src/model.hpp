@@ -9,7 +9,8 @@ struct Vertex {
     float px, py, pz;
     float nx, ny, nz;
     float u, v;
-    float part; // rig part index, as a float for the vertex attribute
+    float part;  // rig part index, as a float for the vertex attribute
+    float layer; // 0 the baked atlas, 1.. a repeating tile texture
 };
 
 struct Image {
@@ -24,7 +25,8 @@ struct Model {
     std::vector<std::string> groups; // obj "g" names, one per rig part
     std::vector<int> vertex_group;   // per vertex, index into groups
     Image texture;
-    bool nearest = false; // chunky texels: "# genmodel filter nearest" in the .mtl
+    std::vector<Image> tiles; // repeating tile textures, the .mtl's later materials
+    bool nearest = false;     // chunky texels: "# genmodel filter nearest" in the .mtl
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };

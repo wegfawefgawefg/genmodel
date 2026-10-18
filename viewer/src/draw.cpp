@@ -14,21 +14,25 @@ layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_nrm;
 layout(location = 2) in vec2 a_uv;
 layout(location = 3) in float a_part;
+layout(location = 4) in float a_layer;
 uniform mat4 u_view;
 uniform mat4 u_proj;
 uniform mat4 u_bones[128];
 uniform vec3 u_glow[128];
+uniform vec2 u_uvoff[128];
 out vec3 v_nrm;
 out vec3 v_view_pos;
 out vec2 v_uv;
 out vec3 v_glow;
+flat out float v_layer;
 void main() {
     int part = int(a_part + 0.5);
     mat4 bone = u_bones[part];
     vec4 vp = u_view * (bone * vec4(a_pos, 1.0));
     v_view_pos = vp.xyz;
     v_nrm = mat3(u_view) * (mat3(bone) * a_nrm);
-    v_uv = a_uv;
+    v_layer = a_layer;
+    v_uv = a_layer > 0.5 ? a_uv + u_uvoff[part] : a_uv;
     v_glow = u_glow[part];
     gl_Position = u_proj * vp;
 }
@@ -40,7 +44,9 @@ in vec3 v_nrm;
 in vec3 v_view_pos;
 in vec2 v_uv;
 in vec3 v_glow;
+flat in float v_layer;
 uniform sampler2D u_tex;
+uniform sampler2D u_tile0, u_tile1, u_tile2;
 uniform int u_mode; // 0 textured, 1 clay, 2 uv checker, 3 wire, 4 additive glow
 out vec4 o_color;
 void main() {
@@ -48,7 +54,9 @@ void main() {
         o_color = vec4(0.05, 0.9, 1.0, 1.0);
         return;
     }
-    vec4 t = texture(u_tex, v_uv);
+    vec4 t = v_layer < 0.5 ? texture(u_tex, v_uv)
+           : v_layer < 1.5 ? texture(u_tile0, v_uv)
+           : v_layer < 2.5 ? texture(u_tile1, v_uv) : texture(u_tile2, v_uv);
     if (u_mode == 4) {
         // flashes: the texture is the flame colour, the view angle thins the edges
         // white-hot where it faces you, deep orange at the grazing edges
@@ -256,6 +264,8 @@ void gpu_upload(Gpu& gpu, Model& model, const Rig& rig) {
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(8 * sizeof(float)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(9 * sizeof(float)));
     glBindVertexArray(0);
 
     // texture with mips and anisotropy so panel lines hold up at a glance
@@ -266,6 +276,19 @@ void gpu_upload(Gpu& gpu, Model& model, const Rig& rig) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, model.nearest ? GL_NEAREST : GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, model.nearest ? 1.0f : 8.0f);
+
+    // repeating tiles, wrapping so their uvs can slide forever
+    for (int i = 0; i < 3; i++) {
+        if (!gpu.tiles[i]) glGenTextures(1, &gpu.tiles[i]);
+        const Image* img = i < (int)model.tiles.size() ? &model.tiles[i] : &model.texture;
+        glBindTexture(GL_TEXTURE_2D, gpu.tiles[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, img->w, img->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img->rgba.data());
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, model.nearest ? GL_NEAREST : GL_LINEAR);
+    }
 
     gpu.index_count = (int)model.indices.size();
     memcpy(gpu.center, model.center, sizeof(gpu.center));
@@ -313,6 +336,18 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const P
     int n_bones = std::min((int)pose.bones.size(), max_parts);
     glUniformMatrix4fv(glGetUniformLocation(gpu.program, "u_bones"), n_bones, GL_FALSE, pose.bones[0].m);
     glUniform3fv(glGetUniformLocation(gpu.program, "u_glow"), n_bones, &pose.glow[0].x);
+    std::vector<float> uvoff((size_t)n_bones * 2, 0.0f);
+    for (int i = 0; i < n_bones && i < (int)pose.uv.size(); i++) {
+        uvoff[i * 2] = pose.uv[i].x;
+        uvoff[i * 2 + 1] = pose.uv[i].y;
+    }
+    glUniform2fv(glGetUniformLocation(gpu.program, "u_uvoff"), n_bones, uvoff.data());
+    const char* tile_names[3] = {"u_tile0", "u_tile1", "u_tile2"};
+    for (int i = 0; i < 3; i++) {
+        glActiveTexture(GL_TEXTURE1 + i);
+        glBindTexture(GL_TEXTURE_2D, gpu.tiles[i]);
+        glUniform1i(glGetUniformLocation(gpu.program, tile_names[i]), 1 + i);
+    }
     int mode = opt.flat ? 1 : (opt.show_uv ? 2 : 0);
     glUniform1i(glGetUniformLocation(gpu.program, "u_mode"), mode);
     glActiveTexture(GL_TEXTURE0);

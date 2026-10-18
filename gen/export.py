@@ -7,28 +7,47 @@ import numpy as np
 from PIL import Image
 
 
-def write_obj(out_dir, name, verts, normals, uvs, faces, texture, face_part, texture_filter="linear"):
+def write_obj(out_dir, name, verts, normals, uvs, faces, texture, face_part, texture_filter="linear",
+              face_tile=None, face_tile_uv=None, tiles=None):
+    """The atlas material plus one material per repeating tile (<name>_<tile>.png). Faces are
+    grouped by part ("g") within each material ("usemtl")."""
     os.makedirs(out_dir, exist_ok=True)
+    tiles = tiles or {}
+    face_tile = face_tile if face_tile is not None else np.array([""] * len(faces))
     Image.fromarray(texture, "RGBA").save(os.path.join(out_dir, name + ".png"))
+    mtl = [f"# genmodel filter {texture_filter}\n", f"newmtl {name}\nKd 1 1 1\nKs 0 0 0\nmap_Kd {name}.png\n"]
+    for tile, img in tiles.items():
+        img.convert("RGBA").save(os.path.join(out_dir, f"{name}_{tile}.png"))
+        mtl.append(f"newmtl {name}_{tile}\nKd 1 1 1\nKs 0 0 0\nmap_Kd {name}_{tile}.png\n")
     with open(os.path.join(out_dir, name + ".mtl"), "w") as f:
         # the viewer reads the filter hint; other tools ignore the comment
-        f.write(f"# genmodel filter {texture_filter}\nnewmtl {name}\nKd 1 1 1\nKs 0 0 0\nmap_Kd {name}.png\n")
+        f.writelines(mtl)
     lines = [f"mtllib {name}.mtl\n", f"o {name}\n"]
     lines += [f"v {x:.5f} {y:.5f} {z:.5f}\n" for x, y, z in verts]
     # obj puts v = 0 at the bottom of the image, the atlas at the top
     lines += [f"vt {u:.6f} {1 - v:.6f}\n" for u, v in uvs]
+    # tile uvs repeat freely (no flip: they are ours)
+    tiled = np.flatnonzero(face_tile != "")
+    lines += [f"vt {u:.6f} {v:.6f}\n" for u, v in face_tile_uv[tiled].reshape(-1, 2)] if len(tiled) else []
+    tile_vt = {k: len(uvs) + 1 + 3 * j for j, k in enumerate(tiled)}
     lines += [f"vn {x:.4f} {y:.4f} {z:.4f}\n" for x, y, z in normals]
-    lines.append(f"usemtl {name}\n")
-    # one group per rig part
     fi = faces + 1
-    order = np.argsort(face_part, kind="stable")
-    current = None
+    material = np.array([name if t == "" else f"{name}_{t}" for t in face_tile])
+    order = np.lexsort((face_part, material))
+    cur_mat, cur_part = None, None
     for k in order:
-        if face_part[k] != current:
-            current = face_part[k]
-            lines.append(f"g {current}\n")
+        if material[k] != cur_mat:
+            cur_mat, cur_part = material[k], None
+            lines.append(f"usemtl {cur_mat}\n")
+        if face_part[k] != cur_part:
+            cur_part = face_part[k]
+            lines.append(f"g {cur_part}\n")
         a, b, c = fi[k]
-        lines.append(f"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}\n")
+        if k in tile_vt:
+            t0 = tile_vt[k]
+            lines.append(f"f {a}/{t0}/{a} {b}/{t0 + 1}/{b} {c}/{t0 + 2}/{c}\n")
+        else:
+            lines.append(f"f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}\n")
     tmp = os.path.join(out_dir, name + ".obj.tmp")
     with open(tmp, "w") as f:
         f.writelines(lines)

@@ -7,7 +7,7 @@
 set -e
 cd "$(dirname "$0")/.."
 name="${1:-liedersanger}"
-base="${name%%-*}"  # a styled build (liedersanger-crunch) plays its base model's anim and sounds
+base="${name%%[-_]*}"  # liedersanger-crunch and liedersanger_lo play liedersanger's anim and sounds
 [ -f "out/$name/$name.obj" ] || name=test
 cmake -S viewer -B build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
 ninja -C build >/dev/null
