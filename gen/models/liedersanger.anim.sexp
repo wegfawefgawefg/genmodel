@@ -148,6 +148,6 @@
   (on-shot (every 2 1) (sound shot (pan 0.3)))
   (on-shot (sound case))
   (sound settle (at 6.15))
-  (hum whine (by rate 0.125) (pitch 0.55 1.3))
-  (hum whirr (by spin 1) (pitch 0.3 1.15))
+  (hum whine (by rate 0.125) (pitch 0.4 0.8))
+  (hum whirr (by spin 1) (pitch 0.22 0.95))
   (hum sizzle (by sizzle 1) (pitch 0.95 1.05)))

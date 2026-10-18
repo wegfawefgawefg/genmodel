@@ -262,7 +262,7 @@ void sound_render(const SoundBank& bank, const Anim& a, double t0, int frames, f
     }
     // soft saturation: stacked shots bark rather than clip
     for (int i = 0; i < frames * 2; i++) {
-        out[i] = std::tanh(out[i] * 1.6f) / std::tanh(1.6f) * 0.9f;
+        out[i] = std::tanh(out[i] * 1.6f) / std::tanh(1.6f) * 0.84f;
     }
 }
 

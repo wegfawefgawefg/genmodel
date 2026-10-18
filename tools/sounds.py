@@ -100,26 +100,28 @@ def synth(kind, length, rng):
     """Made-up sounds: a geared motor whirr, smoke sizzle, a pneumatic hiss."""
     t = np.arange(int(length * SR)) / SR
     if kind == "whirr":
-        # a gear train: every tooth meshing is a small metallic ping (with a fixed pattern of
-        # uneven teeth, like real gears), over the mesh tone and a faint motor hum. At low
-        # playback speed the teeth tick apart, at speed they run together into a grind.
-        mesh = 90.0  # teeth per second at full speed; whole teeth per clip so it loops
+        # a heavy gear train: big teeth meshing ring low and long (with a fixed pattern of
+        # uneven teeth, like worn gears), a growling motor underneath and some grind. At
+        # low playback speed the teeth clunk apart; at speed they run into a deep churn.
+        mesh = 40.0  # teeth per second at full speed; whole teeth per clip so it loops
         n = len(t)
-        ping_t = np.arange(int(0.012 * SR)) / SR
-        ping = sum(a * np.sin(2 * np.pi * f * ping_t) for a, f in ((1.0, 2300), (0.7, 3700), (0.5, 1150)))
-        ping *= np.exp(-ping_t / 0.004)
+        ping_t = np.arange(int(0.04 * SR)) / SR
+        ping = sum(a * np.sin(2 * np.pi * f * ping_t) for a, f in ((1.0, 520), (0.6, 830), (0.35, 1400), (0.5, 260)))
+        ping *= np.exp(-ping_t / 0.012)
         clicks = np.zeros(n)
-        teeth = int(length * mesh)
-        uneven = rng.uniform(0.6, 1.0, 18)  # an 18-tooth gear's wear, repeating
-        for k in range(teeth):
+        uneven = rng.uniform(0.55, 1.0, 24)  # a 24-tooth gear's wear, repeating
+        for k in range(int(length * mesh)):
             i = int(k / mesh * SR)
             if i < n:
-                clicks[i] += uneven[k % 18]
+                clicks[i] += uneven[k % 24]
         out = signal.fftconvolve(clicks, ping)[:n]
-        out += 0.18 * np.sin(2 * np.pi * mesh * t) + 0.1 * np.sin(2 * np.pi * mesh * 2 * t + 1)
-        out += 0.08 * np.sin(2 * np.pi * mesh * 5 * t) * (0.7 + 0.3 * np.sin(2 * np.pi * mesh / 18 * t))
-        out += 0.12 * np.sin(2 * np.pi * 50 * t)
-        return out
+        # motor: a buzzy low drone (harmonics of 55 Hz), rounded off above 600 Hz
+        motor = sum(np.sin(2 * np.pi * 55 * h * t + 0.7 * h) / h for h in range(1, 12))
+        motor = signal.lfilter(*signal.butter(2, 600 / (SR / 2)), motor)
+        # grind: low noise pulsing with the teeth
+        grind = signal.lfilter(*signal.butter(2, [120 / (SR / 2), 700 / (SR / 2)], "band"), rng.standard_normal(n))
+        grind *= 0.5 + 0.5 * np.sin(2 * np.pi * mesh * t) ** 2
+        return out + 0.55 * motor + 1.2 * grind + 0.2 * np.sin(2 * np.pi * mesh * 2 * t)
     noise = rng.standard_normal(len(t))
     if kind == "sizzle":
         # bright hiss that flutters, with sparse crackle pops

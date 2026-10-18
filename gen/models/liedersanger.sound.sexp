@@ -52,8 +52,8 @@
   ; loops driven by the animation: gear whine with the fire rate, the motor's wind-up,
   ; and the hot barrels sizzling
   (cue whine
-    (layer whine (gain 0.04)))
+    (layer whine (gain 0.03)))
   (cue whirr
-    (layer whirr (gain 0.09)))
+    (layer whirr (gain 0.16)))
   (cue sizzle
     (layer sizzle (gain 0.09))))
