@@ -97,14 +97,16 @@ bool load_rig(const std::string& path, Rig& out) {
             read_path(c, rig, path_parents.back());
         }
     }
+    // a rig without a root gets one first, before any parent indices are resolved
+    if (find_part(rig, "root") < 0) {
+        rig.parts.insert(rig.parts.begin(), {"root", -1, {0, 0, 0}, false});
+        parent_names.insert(parent_names.begin(), "");
+    }
     for (size_t i = 0; i < rig.parts.size(); i++) {
         rig.parts[i].parent = parent_names[i].empty() ? -1 : find_part(rig, parent_names[i]);
     }
     for (size_t i = 0; i < rig.paths.size(); i++) {
         rig.paths[i].parent = find_part(rig, path_parents[i]);
-    }
-    if (find_part(rig, "root") < 0) {
-        rig.parts.insert(rig.parts.begin(), {"root", -1, {0, 0, 0}, false});
     }
     printf("rig %s: %zu parts, %zu paths\n", path.c_str(), rig.parts.size(), rig.paths.size());
     out = std::move(rig);

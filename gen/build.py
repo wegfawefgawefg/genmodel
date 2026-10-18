@@ -48,7 +48,8 @@ def mesh_piece(pc, coarse, poly=False):
     v, f = mesh_element(pc.element, pc, coarse, poly)
     uv = pc.tile_uv(v) if pc.tile else None
     vs = [v @ R.T + t for R, t in pc.placements]
-    fs = [f + i * len(v) for i in range(len(pc.placements))]
+    # mirrored copies come out inside out: rewind them
+    fs = [(f if np.linalg.det(R) > 0 else f[:, ::-1]) + i * len(v) for i, (R, t) in enumerate(pc.placements)]
     uvs = np.tile(uv, (len(pc.placements), 1)) if uv is not None else None
     return np.concatenate(vs).astype(F), np.concatenate(fs), uvs
 
@@ -116,19 +117,22 @@ def main():
     ap.add_argument("--tex", type=int, default=None)
     ap.add_argument("--fast", action="store_true", help="coarser voxels and a small texture")
     ap.add_argument("--style", default=None, help="a gen/styles/<name>.sexp to build in")
+    ap.add_argument("--part", default=None, help="mechs: build one part alone, in its own frame")
     args = ap.parse_args()
 
     t0 = time.time()
     mod = importlib.import_module("models." + args.model)
+    build_args = {"part": args.part} if args.part else {}
     # a model made for a style (STYLE = "lofi") builds in it unless told otherwise
     native = getattr(mod, "STYLE", None)
     style_name = args.style or native
     style = load_style(style_name) if style_name else {}
     # facets must be set before the model builds its primitives
     sdf.FACETS = style.get("facets", 0)
-    scene = mod.build()
+    scene = mod.build(**build_args)
     scene.style = style
-    size = args.tex or (1024 if args.fast else style.get("texture", scene.texture_size))
+    # a model can insist on its texture size (TEXTURE), e.g. a whole mech needs more texels
+    size = args.tex or getattr(mod, "TEXTURE", None) or (1024 if args.fast else style.get("texture", scene.texture_size))
     coarse = (1.6 if args.fast else 1.0) * style.get("voxel", 1.0)
     for pc in scene.pieces:
         # small repeated parts (coil rings, links) fall apart below a few dozen triangles
@@ -137,6 +141,7 @@ def main():
         if m.name in style.get("palette", {}):  # styles without a palette keep the model's
             m.color = style["palette"][m.name]
     out_name = args.model + ("-" + style_name if style_name and style_name != native else "")
+    out_name += ("_" + args.part) if args.part else ""
 
     print("meshing")
     v, f, face_part, face_piece, face_tile, face_tile_uv = mesh_pieces(scene, coarse, style.get("mesher") == "poly")

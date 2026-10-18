@@ -289,6 +289,44 @@ def bend(node, depth_t=np.zeros(3, F)):
     return loft(node.curve, prof, max(s0, 0.0), min(s1, node.curve.length), node.across)
 
 
+def lathe_mesh(profile, n):
+    """Rings of n sides at each profile point, joined by quads, capped where r > 0. Flat
+    sides face angle 0 like sdf.radial (x then z)."""
+    verts, rings = [], []
+    for r, y in profile:
+        circ = r / math.cos(math.pi / n)
+        if r <= 1e-6:
+            rings.append([len(verts)])
+            verts.append((0.0, y, 0.0))
+            continue
+        idx = []
+        for k in range(n):
+            a = math.pi / n + 2 * math.pi * k / n
+            idx.append(len(verts))
+            verts.append((circ * math.cos(a), y, circ * math.sin(a)))
+        rings.append(idx)
+    tris = []
+    for a, b in zip(rings[:-1], rings[1:]):
+        if len(a) == 1 and len(b) == 1:
+            continue
+        for k in range(n):
+            a0, a1 = a[k % len(a)], a[(k + 1) % len(a)]
+            b0, b1 = b[k % len(b)], b[(k + 1) % len(b)]
+            if len(a) == 1:
+                tris.append((a0, b1, b0))
+            elif len(b) == 1:
+                tris.append((a0, a1, b0))
+            else:
+                tris += [(a0, a1, b1), (a0, b1, b0)]
+    # rings run clockwise seen from +y, so the top cap fans backwards and the bottom forwards
+    for ring, top in ((rings[0], True), (rings[-1], False)):
+        if len(ring) > 1:
+            for k in range(1, n - 1):
+                tri = (ring[0], ring[k], ring[k + 1])
+                tris.append(tri[::-1] if top else tri)
+    return orient_outward(np.array(verts, F), np.array(tris, np.int32))
+
+
 def polygonize(node):
     """(verts, faces) for a tree of supported nodes, or None."""
     n = sides()
@@ -312,6 +350,8 @@ def polygonize(node):
                 lon = 2 * math.pi * k / n
                 pts.append((node.r * math.cos(lat) * math.cos(lon), node.r * math.sin(lat), node.r * math.cos(lat) * math.sin(lon)))
         return hull(pts)
+    if isinstance(node, sdf.Lathe):
+        return lathe_mesh(node.profile, node.sides or max(n, 12))
     if isinstance(node, sdf.Torus):
         return torus_mesh(node.R, node.r, node.axis, max(2 * n, 12), 6)
     if isinstance(node, sdf.Prism):
@@ -326,6 +366,9 @@ def polygonize(node):
         if m is None:
             return None
         v, f = m
+        # a reflection (mirrored left/right parts) turns faces inside out: rewind them
+        if np.linalg.det(node.R) < 0:
+            f = f[:, ::-1].copy()
         return (v @ node.R.T + node.t).astype(F), f
     if isinstance(node, (sdf.Paint, sdf.Round)):
         return polygonize(node.base if isinstance(node, sdf.Paint) else node.child)

@@ -615,3 +615,25 @@ def channel(width, depth, wall):
     w, t = width * 0.5, wall
     return [(-w, -depth), (w, -depth), (w, 0.0), (w - t, 0.0), (w - t, -depth + t), (-w + t, -depth + t),
             (-w + t, 0.0), (-w, 0.0)]
+
+
+class Lathe(Leaf):
+    """A profile [(r, y), ...] spun round the y axis (polygonal when FACETS is on).
+    List it from top to bottom; the axis closes it."""
+
+    def __init__(self, profile, mat):
+        self.profile = [(float(r), float(y)) for r, y in profile]
+        self.mat = mat
+        pts = self.profile
+        self.closed = [(0.0, pts[0][1])] + pts + [(0.0, pts[-1][1])]
+        # big round shells want more sides than the default facets; the mesher uses the same
+        self.sides = max(FACETS, 12) if FACETS else 0
+
+    def sd(self, p):
+        q = np.stack([radial(p[:, [0, 2]], self.sides), p[:, 1]], 1)
+        return sd_polygon(q, self.closed)
+
+    def bounds(self):
+        r = max(r for r, _ in self.profile) / (math.cos(math.pi / self.sides) if self.sides else 1)
+        ys = [y for _, y in self.profile]
+        return np.array([-r, min(ys), -r], F), np.array([r, max(ys), r], F)
