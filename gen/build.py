@@ -40,16 +40,24 @@ def mesh_piece(pc, coarse):
 
 
 def mesh_pieces(scene, coarse):
-    """Mesh every piece, then drop faces buried inside other pieces."""
+    """Mesh every piece, then drop faces buried inside other pieces of the same rigid part
+    (a buried face on a moving part could come out into view)."""
     bodies = [(pc.body, *pc.body.bounds()) for pc in scene.pieces]
-    vs, fs, base = [], [], 0
+    vs, fs, parts, base = [], [], [], 0
     for i, pc in enumerate(scene.pieces):
         v, f = mesh_piece(pc, coarse)
         f = meshing.drop_degenerate(v, f)
-        others = bodies[:i] + bodies[i + 1 :]
+        others = [bodies[j] for j, o in enumerate(scene.pieces)
+                  if j != i and not o.free and not pc.free and not pc.part_each and o.part == pc.part]
         if others and len(f):
             d, _ = scene.union_eval(v[f].mean(1), others)
             f = f[d > -pc.h * 0.75]
+        if pc.part_each:
+            # copies were appended in order, so faces split evenly between them
+            copy = np.minimum(f[:, 0] // (len(v) // len(pc.placements)), len(pc.placements) - 1)
+            parts += [f"{pc.part}.{c}" for c in copy]
+        else:
+            parts += [pc.part] * len(f)
         print(f"  {pc.name}: {len(f)} tris")
         vs.append(v)
         fs.append(f + base)
@@ -59,7 +67,7 @@ def mesh_pieces(scene, coarse):
     used = np.unique(f)
     remap = np.full(len(v), -1, np.int32)
     remap[used] = np.arange(len(used))
-    return v[used], remap[f]
+    return v[used], remap[f], np.array(parts)
 
 
 def main():
@@ -76,16 +84,19 @@ def main():
     coarse = 1.6 if args.fast else 1.0
 
     print("meshing")
-    v, f = mesh_pieces(scene, coarse)
+    v, f, face_part = mesh_pieces(scene, coarse)
     bodies = [(pc.body, *pc.body.bounds()) for pc in scene.pieces]
     v, n, f = meshing.surface_normals(lambda q: scene.union_eval(q, bodies)[0], v, f, 0.03)
     print(f"  decimated: {len(f)} tris, {len(v)} verts  ({time.time() - t0:.1f}s)")
 
     print("texturing")
+    n_faces = len(f)
     v, n, f, uv = bake.make_atlas(v, n, f, size)
+    assert len(f) == n_faces, "atlas changed the face list"
     tex = bake.bake(scene, v, n, f, uv, size, unit=getattr(mod, "UNIT", 0.08))
     out_dir = os.path.join(ROOT, "out", args.model)
-    export.write_obj(out_dir, args.model, v * scene.scale, n, uv, f, tex)
+    export.write_obj(out_dir, args.model, v * scene.scale, n, uv, f, tex, face_part)
+    export.write_rig(out_dir, args.model, scene)
     print(f"wrote out/{args.model}/{args.model}.obj  {len(f)} tris, {size}px texture  ({time.time() - t0:.1f}s)")
 
 

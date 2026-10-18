@@ -1,9 +1,9 @@
-// genmodel viewer: shows a generated .obj with its texture.
-//   viewer out/model.obj                 window, mouse drag to orbit
-//   viewer out/model.obj --capture a.png headless render on the GPU, no window
+// genmodel viewer: shows a generated .obj with its texture, rig and animation.
+//   viewer out/m/m.obj [--anim gen/models/m.anim.sexp]   window, mouse drag to orbit
+//   viewer out/m/m.obj --capture a.png                    headless render on the GPU, no window
+#include "asset.hpp"
 #include "draw.hpp"
 #include "headless.hpp"
-#include "model.hpp"
 
 #include <GL/glcorearb.h>
 #include <SDL3/SDL.h>
@@ -17,9 +17,12 @@
 
 struct Args {
     std::string obj;
+    std::string anim;
     std::string capture;
-    bool sheet = false; // four standard views in a 2x2 grid
-    int turntable = 0;  // frames in one full turn, written to a %d pattern
+    bool sheet = false;     // four standard views in a 2x2 grid
+    int turntable = 0;      // frames to write to a %d pattern, orbiting and animating
+    float spin_secs = 0;    // seconds per orbit in a turntable (0: one orbit over all frames)
+    float time = 0;         // animation time of a still, or of a turntable's first frame
     int width = 1280;
     int height = 720;
     Camera cam;
@@ -32,8 +35,14 @@ static bool parse_args(int argc, char** argv, Args& a) {
         bool has_next = i + 1 < argc;
         if (s == "--capture" && has_next) {
             a.capture = argv[++i];
+        } else if (s == "--anim" && has_next) {
+            a.anim = argv[++i];
         } else if (s == "--turntable" && has_next) {
             a.turntable = atoi(argv[++i]);
+        } else if (s == "--spin-secs" && has_next) {
+            a.spin_secs = (float)atof(argv[++i]);
+        } else if (s == "--time" && has_next) {
+            a.time = (float)atof(argv[++i]);
         } else if (s == "--sheet") {
             a.sheet = true;
         } else if (s == "--size" && i + 2 < argc) {
@@ -67,17 +76,28 @@ static std::vector<Shot> sheet_shots(const Args& a) {
     float views[4][2] = {{a.cam.yaw / deg, a.cam.pitch / deg}, {0, 0}, {0, 89}, {200, 20}};
     std::vector<Shot> shots;
     for (auto& v : views) {
-        Shot s;
-        s.cam = a.cam;
+        Shot s = {a.cam, a.opt, a.time};
         s.cam.yaw = v[0] * deg;
         s.cam.pitch = v[1] * deg;
-        s.opt = a.opt;
         shots.push_back(s);
     }
     return shots;
 }
 
-static int run_window(const Args& a, Model& model) {
+// 60 fps frames: time runs on from --time while the camera orbits
+static std::vector<Shot> turntable_shots(const Args& a) {
+    float spin = a.spin_secs > 0 ? a.spin_secs : a.turntable / 60.0f;
+    std::vector<Shot> shots;
+    for (int i = 0; i < a.turntable; i++) {
+        float t = i / 60.0f;
+        Shot s = {a.cam, a.opt, a.time + t};
+        s.cam.yaw += 2.0f * (float)M_PI * t / spin;
+        shots.push_back(s);
+    }
+    return shots;
+}
+
+static int run_window(const Args& a, Asset& asset) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
@@ -102,14 +122,19 @@ static int run_window(const Args& a, Model& model) {
     if (!ctx || !gpu_init(gpu)) {
         return 1;
     }
-    gpu_upload(gpu, model);
+    gpu_upload(gpu, asset.model, asset.rig);
     printf("drag: orbit   right drag: pan   wheel: zoom   W: wire   C: clay   U: uvs\n"
-           "space: spin   R: reset view   Esc: quit   (reloads when the model file changes)\n");
+           "space: spin   R: reset view   P: pause   , .: step   [ ]: slower/faster   Esc: quit\n"
+           "(reloads when the model or animation files change)\n");
 
     Camera cam = a.cam;
     DrawOptions opt = a.opt;
+    Pose pose;
     bool spin = false;
-    int64_t stamp = model_stamp(a.obj);
+    bool paused = false;
+    float speed = 1.0f;
+    float anim_time = a.time;
+    int64_t stamp = asset_stamp(asset);
     uint64_t last_check = SDL_GetTicks();
     uint64_t last_frame = SDL_GetTicks();
     bool running = true;
@@ -145,32 +170,49 @@ static int run_window(const Args& a, Model& model) {
                     spin = !spin;
                 } else if (k == SDLK_R) {
                     cam = a.cam;
+                } else if (k == SDLK_P) {
+                    paused = !paused;
+                } else if (k == SDLK_COMMA) {
+                    anim_time -= 1.0f / 60.0f;
+                } else if (k == SDLK_PERIOD) {
+                    anim_time += 1.0f / 60.0f;
+                } else if (k == SDLK_LEFTBRACKET) {
+                    speed = std::fmax(speed * 0.5f, 1.0f / 64.0f);
+                } else if (k == SDLK_RIGHTBRACKET) {
+                    speed = std::fmin(speed * 2.0f, 4.0f);
                 }
             }
         }
 
-        // hot reload when the generator rewrites the model
+        // hot reload when the generator or the animation file changes
         uint64_t now = SDL_GetTicks();
         if (now - last_check > 500) {
             last_check = now;
-            int64_t s = model_stamp(a.obj);
+            int64_t s = asset_stamp(asset);
             if (s != stamp) {
                 stamp = s;
                 SDL_Delay(200); // let the writer finish
-                if (load_model(a.obj, model)) {
-                    gpu_upload(gpu, model);
+                Asset fresh;
+                if (load_asset(asset.obj_path, asset.anim_path, fresh)) {
+                    asset = std::move(fresh);
+                    gpu_upload(gpu, asset.model, asset.rig);
                 }
             }
         }
-        if (spin) {
-            cam.yaw += (now - last_frame) * 0.0005f;
-        }
+        float dt = (now - last_frame) / 1000.0f;
         last_frame = now;
+        if (spin) {
+            cam.yaw += dt * 0.5f;
+        }
+        if (!paused) {
+            anim_time += dt * speed;
+        }
 
         // draw frame
         int w, h;
         SDL_GetWindowSizeInPixels(window, &w, &h);
-        gpu_draw(gpu, cam, opt, w, h);
+        asset_pose(asset, anim_time, pose);
+        gpu_draw(gpu, cam, opt, pose, w, h);
         SDL_GL_SwapWindow(window);
     }
     SDL_GL_DestroyContext(ctx);
@@ -182,12 +224,13 @@ static int run_window(const Args& a, Model& model) {
 int main(int argc, char** argv) {
     Args a;
     if (!parse_args(argc, argv, a)) {
-        fprintf(stderr, "usage: viewer model.obj [--capture out.png [--sheet | --turntable N]] [--size w h]\n"
+        fprintf(stderr, "usage: viewer model.obj [--anim file.anim.sexp] [--capture out.png [--sheet |\n"
+                        "       --turntable frames [--spin-secs s]]] [--time t] [--size w h]\n"
                         "       [--yaw deg] [--pitch deg] [--zoom z] [--wire] [--clay] [--uv]\n");
         return 1;
     }
-    Model model;
-    if (!load_model(a.obj, model)) {
+    Asset asset;
+    if (!load_asset(a.obj, a.anim, asset)) {
         return 1;
     }
     if (!a.capture.empty()) {
@@ -195,16 +238,12 @@ int main(int argc, char** argv) {
         if (a.sheet) {
             shots = sheet_shots(a);
         } else if (a.turntable > 0) {
-            for (int i = 0; i < a.turntable; i++) {
-                Shot s = {a.cam, a.opt};
-                s.cam.yaw += 2.0f * (float)M_PI * (float)i / (float)a.turntable;
-                shots.push_back(s);
-            }
+            shots = turntable_shots(a);
         } else {
-            shots.push_back({a.cam, a.opt});
+            shots.push_back({a.cam, a.opt, a.time});
         }
         int columns = a.sheet ? 2 : 1;
-        return capture(model, shots, columns, a.width, a.height, a.capture) ? 0 : 1;
+        return capture(asset, shots, columns, a.width, a.height, a.capture) ? 0 : 1;
     }
 
     // agents must never put a window on the user's screen
@@ -212,5 +251,5 @@ int main(int argc, char** argv) {
         fprintf(stderr, "refusing to open a window under an agent; use --capture\n");
         return 1;
     }
-    return run_window(a, model);
+    return run_window(a, asset);
 }

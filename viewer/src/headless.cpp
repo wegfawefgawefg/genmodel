@@ -46,7 +46,7 @@ bool make_context(EGLDisplay& out_display) {
 
 } // namespace
 
-bool capture(const Model& model, const std::vector<Shot>& shots, int columns, int width,
+bool capture(Asset& asset, const std::vector<Shot>& shots, int columns, int width,
              int height, const std::string& out_path) {
     EGLDisplay dpy;
     if (!make_context(dpy)) {
@@ -57,7 +57,8 @@ bool capture(const Model& model, const std::vector<Shot>& shots, int columns, in
     if (!gpu_init(gpu)) {
         return false;
     }
-    gpu_upload(gpu, model);
+    gpu_upload(gpu, asset.model, asset.rig);
+    Pose pose;
 
     // multisampled target, resolved into a plain one for reading back
     uint32_t msaa_fbo, msaa_color, msaa_depth, fbo, color;
@@ -87,7 +88,8 @@ bool capture(const Model& model, const std::vector<Shot>& shots, int columns, in
 
     for (size_t i = 0; i < shots.size(); i++) {
         glBindFramebuffer(GL_FRAMEBUFFER, msaa_fbo);
-        gpu_draw(gpu, shots[i].cam, shots[i].opt, width, height);
+        asset_pose(asset, shots[i].time, pose);
+        gpu_draw(gpu, shots[i].cam, shots[i].opt, pose, width, height);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
         glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT,

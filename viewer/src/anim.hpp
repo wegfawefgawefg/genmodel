@@ -1,0 +1,99 @@
+#pragma once
+
+// Event-driven rigid animation, read from an .anim.sexp file.
+//
+// A fire-rate curve decides when shots happen; tracks react to shots (kick, step, feed,
+// throw) or follow a driver continuously (shake, wave, glow). Contributions are summed
+// per part, then turned into one matrix per part for the vertex shader.
+
+#include "rig.hpp"
+#include "vec.hpp"
+
+#include <string>
+#include <vector>
+
+enum class Ease { linear, smooth, expo_in, expo_out, expo_inout, superexp, back, spring };
+
+// an ease, optionally blended with a second one: (mix expo-out back 0.3)
+struct EaseSpec {
+    Ease a = Ease::linear;
+    Ease b = Ease::linear;
+    float w = 0.0f;
+};
+
+enum class Driver { one, rate, heat, idle };
+
+struct Drive {
+    Driver driver = Driver::one;
+    float k = 1.0f;
+    bool eased = false;
+    EaseSpec ease;
+};
+
+// what a track does to a part at full strength
+struct Motion {
+    Vec3 move;
+    Vec3 rot_axis = {0, 0, 1};
+    float rot_deg = 0;
+    float scale = 0;
+    bool has_scale = false;
+    Vec3 glow;
+};
+
+enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow };
+
+struct Track {
+    TrackKind kind = TrackKind::kick;
+    std::vector<int> parts;
+    float spread0 = 1, spread1 = 1; // weight across the part list, first to last
+    Motion motion;
+    // shot filter: shots whose index % every == offset
+    int every = 1, offset = 0;
+    float at = -1; // a kick at this time instead of on shots
+    // kick envelope
+    float attack = 0.01f, release = 0.2f;
+    EaseSpec attack_ease = {Ease::expo_out}, release_ease = {Ease::expo_out};
+    float spring_hz = 10, spring_damp = 0.3f;
+    float vary = 0;                 // per-shot strength jitter, 0..1
+    Vec3 roll_axis;                 // per-shot random spin (degrees in roll_deg)
+    float roll_deg = 0;
+    // step / feed
+    float over = 0.05f;
+    EaseSpec over_ease = {Ease::expo_out};
+    int path = -1;
+    // throw
+    Vec3 vel, jitter;
+    float gravity = -4, spin = 720, life = 1;
+    // continuous
+    Drive by;
+    float freq = 1;
+};
+
+struct Anim {
+    float length = 4;
+    std::vector<Track> tracks;
+    // fire rate segments (t0 t1 v0 v1 ease)
+    struct Seg {
+        float t0, t1, v0, v1;
+        EaseSpec ease;
+    };
+    std::vector<Seg> rate;
+    float heat_gain = 0.04f, heat_cool = 1.5f;
+    // tables built at load
+    std::vector<float> shots; // times in one loop
+    float table_dt = 1.0f / 480.0f;
+    std::vector<float> rate_table, heat_table, idle_table;
+};
+
+bool load_anim(const std::string& path, const Rig& rig, Anim& out);
+
+// per-part matrices for time t (seconds, wrapped into the loop)
+struct Pose {
+    std::vector<Mat4> bones;
+    std::vector<Vec3> glow;
+};
+
+void evaluate(const Anim& anim, const Rig& rig, float t, Pose& out);
+// the rest pose, for models without animation
+void rest_pose(const Rig& rig, Pose& out);
+float ease(const EaseSpec& e, float t);

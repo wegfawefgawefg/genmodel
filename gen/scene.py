@@ -27,6 +27,9 @@ class Piece:
     details: list = field(default_factory=list)  # (op, node, mat) baked into the texture only
     element: object = None  # instanced pieces: one element meshed once...
     placements: list = field(default_factory=list)  # ...and copied to each (R, t)
+    part: str = "root"    # rig part that carries it; instanced pieces may give one per copy
+    part_each: bool = False  # instanced: copy i belongs to part "<part>.<i>"
+    free: bool = False    # moves far from rest (casings, flashes): no culling, casts no AO
 
     def cut(self, node, mat=None):
         self.details.append(("cut", node, mat))
@@ -53,10 +56,35 @@ class Piece:
         return n
 
 
-def instanced(name, element, placements, h, tris):
+def instanced(name, element, placements, h, tris, part="root", part_each=False, free=False):
     """A piece made of copies of one element; the body (for baking) is their union."""
     body = sdf.Union(*[sdf.Xform(element, R, t) for R, t in placements])
-    return Piece(name, body, h=h, tris=tris, element=element, placements=placements)
+    return Piece(name, body, h=h, tris=tris, element=element, placements=placements, part=part,
+                 part_each=part_each, free=free)
+
+
+@dataclass
+class Part:
+    """A rigid chunk the animation moves: rotates about pivot, inherits its parent."""
+
+    name: str
+    parent: str = ""
+    pivot: tuple = (0.0, 0.0, 0.0)
+    additive: bool = False  # drawn glowing and blended (muzzle flashes)
+
+
+@dataclass
+class Path:
+    """A bezier the animation can bend (its handles are parts) with links riding on it."""
+
+    name: str
+    parent: str
+    points: list          # p0 h1 h2 p3
+    links: list           # part names riding the path, in order from its start
+    pitch: float          # arc length between links
+    start: float = 0.0    # arc length of the first link
+    anchor: str = ""      # part carrying the start point
+    across: tuple = (1.0, 0.0, 0.0)
 
 
 @dataclass
@@ -78,6 +106,8 @@ class Scene:
     materials: list
     pieces: list
     decals: list = field(default_factory=list)
+    parts: list = field(default_factory=list)
+    paths: list = field(default_factory=list)
     texture_size: int = 2048
     scale: float = 1.0    # applied at export
 
@@ -97,10 +127,17 @@ class Scene:
         # far points: a lower bound is fine for ao and culling
         return d, m
 
-    def bake_nodes(self):
+    def bake_nodes(self, include_free=True):
         out = []
         for pc in self.pieces:
+            if pc.free and not include_free:
+                continue
             n = pc.bake_node()
             lo, hi = n.bounds()
             out.append((n, lo, hi))
         return out
+
+
+def instance_parts(piece, parent):
+    """One part per copy of a part_each piece, pivoting where the copy sits."""
+    return [Part(f"{piece.part}.{i}", parent, tuple(float(x) for x in t)) for i, (_, t) in enumerate(piece.placements)]

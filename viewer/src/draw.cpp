@@ -2,6 +2,7 @@
 
 #include <GL/glcorearb.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -12,16 +13,23 @@ const char* model_vs = R"(#version 330 core
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_nrm;
 layout(location = 2) in vec2 a_uv;
+layout(location = 3) in float a_part;
 uniform mat4 u_view;
 uniform mat4 u_proj;
+uniform mat4 u_bones[128];
+uniform vec3 u_glow[128];
 out vec3 v_nrm;
 out vec3 v_view_pos;
 out vec2 v_uv;
+out vec3 v_glow;
 void main() {
-    vec4 vp = u_view * vec4(a_pos, 1.0);
+    int part = int(a_part + 0.5);
+    mat4 bone = u_bones[part];
+    vec4 vp = u_view * (bone * vec4(a_pos, 1.0));
     v_view_pos = vp.xyz;
-    v_nrm = mat3(u_view) * a_nrm;
+    v_nrm = mat3(u_view) * (mat3(bone) * a_nrm);
     v_uv = a_uv;
+    v_glow = u_glow[part];
     gl_Position = u_proj * vp;
 }
 )";
@@ -31,8 +39,9 @@ const char* model_fs = R"(#version 330 core
 in vec3 v_nrm;
 in vec3 v_view_pos;
 in vec2 v_uv;
+in vec3 v_glow;
 uniform sampler2D u_tex;
-uniform int u_mode; // 0 textured, 1 clay, 2 uv checker, 3 wire
+uniform int u_mode; // 0 textured, 1 clay, 2 uv checker, 3 wire, 4 additive glow
 out vec4 o_color;
 void main() {
     if (u_mode == 3) {
@@ -40,6 +49,15 @@ void main() {
         return;
     }
     vec4 t = texture(u_tex, v_uv);
+    if (u_mode == 4) {
+        // flashes: the texture is the flame colour, the view angle thins the edges
+        // white-hot where it faces you, deep orange at the grazing edges
+        float facing = abs(dot(normalize(v_nrm), normalize(-v_view_pos)));
+        vec3 edge = vec3(1.0, 0.22, 0.02);
+        vec3 flame = mix(edge, t.rgb * vec3(1.0, 0.95, 0.85), facing * facing);
+        o_color = vec4(flame * (0.25 + 1.1 * facing) + v_glow, 1.0);
+        return;
+    }
     vec3 albedo = pow(t.rgb, vec3(2.2));
     float shine = t.a;
     if (u_mode == 1) {
@@ -79,6 +97,11 @@ void main() {
     float rim = pow(1.0 - max(dot(n, eye), 0.0), 3.0) * max(dot(n, rim_dir) + 0.4, 0.0);
 
     vec3 col = diffuse + key_col * spec * nk + rim_col * rim * (0.15 + 0.35 * shine);
+    // heat and lamps: emissive on top of the lighting; dark metal shows heat most,
+    // and a hot part's own lighting fades under the glow
+    float dark = 1.0 - clamp(dot(albedo, vec3(0.33)) * 3.0, 0.0, 1.0);
+    vec3 emit = v_glow * (0.35 + 0.65 * dark);
+    col = col * (1.0 - clamp(dot(emit, vec3(0.6)), 0.0, 0.85)) + emit;
     col = col / (1.0 + col * 0.25);
     o_color = vec4(pow(col, vec3(1.0 / 2.2)), 1.0);
 }
@@ -200,20 +223,39 @@ bool gpu_init(Gpu& gpu) {
     return true;
 }
 
-void gpu_upload(Gpu& gpu, const Model& model) {
+void gpu_upload(Gpu& gpu, Model& model, const Rig& rig) {
+    // obj groups -> rig parts (unknown groups ride root)
+    std::vector<int> group_part(model.groups.size(), 0);
+    for (size_t g = 0; g < model.groups.size(); g++) {
+        int p = find_part(rig, model.groups[g]);
+        group_part[g] = p >= 0 && p < max_parts ? p : 0;
+    }
+    for (size_t i = 0; i < model.verts.size(); i++) {
+        model.verts[i].part = (float)group_part[model.vertex_group[i]];
+    }
+    // opaque triangles first, additive ones after
+    std::vector<uint32_t> opaque, additive;
+    for (size_t i = 0; i + 2 < model.indices.size(); i += 3) {
+        int p = (int)model.verts[model.indices[i]].part;
+        std::vector<uint32_t>& dst = rig.parts[p].additive ? additive : opaque;
+        dst.insert(dst.end(), {model.indices[i], model.indices[i + 1], model.indices[i + 2]});
+    }
+    gpu.additive_first = (int)opaque.size();
+    opaque.insert(opaque.end(), additive.begin(), additive.end());
+
     glBindVertexArray(gpu.vao);
     glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
-    glBufferData(GL_ARRAY_BUFFER, model.verts.size() * sizeof(Vertex), model.verts.data(),
-                 GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, model.verts.size() * sizeof(Vertex), model.verts.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gpu.ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, model.indices.size() * sizeof(uint32_t),
-                 model.indices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, opaque.size() * sizeof(uint32_t), opaque.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(8 * sizeof(float)));
     glBindVertexArray(0);
 
     // texture with mips and anisotropy so panel lines hold up at a glance
@@ -230,7 +272,7 @@ void gpu_upload(Gpu& gpu, const Model& model) {
     gpu.radius = model.radius;
 }
 
-void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, int width, int height) {
+void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const Pose& pose, int width, int height) {
     glViewport(0, 0, width, height);
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -268,6 +310,9 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, int wid
     glUniformMatrix4fv(glGetUniformLocation(gpu.program, "u_view"), 1, GL_FALSE, view);
     glUniformMatrix4fv(glGetUniformLocation(gpu.program, "u_proj"), 1, GL_FALSE, proj);
     glUniform1i(glGetUniformLocation(gpu.program, "u_tex"), 0);
+    int n_bones = std::min((int)pose.bones.size(), max_parts);
+    glUniformMatrix4fv(glGetUniformLocation(gpu.program, "u_bones"), n_bones, GL_FALSE, pose.bones[0].m);
+    glUniform3fv(glGetUniformLocation(gpu.program, "u_glow"), n_bones, &pose.glow[0].x);
     int mode = opt.flat ? 1 : (opt.show_uv ? 2 : 0);
     glUniform1i(glGetUniformLocation(gpu.program, "u_mode"), mode);
     glActiveTexture(GL_TEXTURE0);
@@ -276,8 +321,22 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, int wid
 
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.0f, 1.0f);
-    glDrawElements(GL_TRIANGLES, gpu.index_count, GL_UNSIGNED_INT, nullptr);
+    glDrawElements(GL_TRIANGLES, gpu.additive_first, GL_UNSIGNED_INT, nullptr);
     glDisable(GL_POLYGON_OFFSET_FILL);
+
+    // glowing parts: added on top, no depth writes
+    int n_add = gpu.index_count - gpu.additive_first;
+    if (n_add > 0 && mode == 0) {
+        glUniform1i(glGetUniformLocation(gpu.program, "u_mode"), 4);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE);
+        glDepthMask(GL_FALSE);
+        glEnable(GL_CULL_FACE);
+        glDrawElements(GL_TRIANGLES, n_add, GL_UNSIGNED_INT, (void*)(gpu.additive_first * sizeof(uint32_t)));
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
 
     if (opt.wire) {
         glUniform1i(glGetUniformLocation(gpu.program, "u_mode"), 3);

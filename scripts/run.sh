@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # opens the viewer on your screen: scripts/run.sh [model-name]   (default: liedersanger)
 # drag: orbit, right drag: pan, wheel: zoom, W wire, C clay, U uvs, space spin, R reset, Esc quit
+# P pause, , . step a frame, [ ] slower/faster; edit gen/models/<name>.anim.sexp live
 # the window reloads by itself whenever the generator rewrites the model
 set -e
 cd "$(dirname "$0")/.."
@@ -8,7 +9,9 @@ name="${1:-liedersanger}"
 [ -f "out/$name/$name.obj" ] || name=test
 cmake -S viewer -B build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
 ninja -C build >/dev/null
-GENMODEL_ON_SCREEN=1 ./build/viewer "out/$name/$name.obj" --yaw -30 --pitch 10 &
+anim=()
+[ -f "gen/models/$name.anim.sexp" ] && anim=(--anim "gen/models/$name.anim.sexp")
+GENMODEL_ON_SCREEN=1 ./build/viewer "out/$name/$name.obj" "${anim[@]}" --yaw -30 --pitch 10 &
 pid=$!
 
 # i3 tiles new windows; float it at 1280x720 centred on the left monitor

@@ -463,3 +463,68 @@ def translate(x, y, z):
 
 def turn(axis, deg):
     return rotation(axis, deg), np.zeros(3, F)
+
+
+class Curve:
+    """Cubic Bezier through control points p0 h1 h2 p3 (more points chain segments of 4,
+    sharing ends: p0 h h p3 h h p6 ...). Sampled densely; lookups are by arc length."""
+
+    def __init__(self, points, samples=96):
+        self.points = np.asarray(points, F)
+        n_seg = (len(self.points) - 1) // 3
+        ts = np.linspace(0, n_seg, samples * n_seg + 1, dtype=F)
+        self.pts = np.array([self._at(t) for t in ts], F)
+        seg = np.linalg.norm(np.diff(self.pts, axis=0), axis=1)
+        self.arc = np.concatenate([[0], np.cumsum(seg)]).astype(F)
+        self.length = float(self.arc[-1])
+
+    def _at(self, t):
+        i = min(int(t), (len(self.points) - 1) // 3 - 1)
+        u = t - i
+        a, b, c, d = self.points[i * 3 : i * 3 + 4]
+        return (1 - u) ** 3 * a + 3 * (1 - u) ** 2 * u * b + 3 * (1 - u) * u * u * c + u ** 3 * d
+
+    def at_length(self, s):
+        """Point and unit tangent at arc length s."""
+        s = min(max(s, 0.0), self.length)
+        k = int(np.clip(np.searchsorted(self.arc, s) - 1, 0, len(self.arc) - 2))
+        f = (s - self.arc[k]) / max(self.arc[k + 1] - self.arc[k], 1e-9)
+        p = self.pts[k] * (1 - f) + self.pts[k + 1] * f
+        t = self.pts[k + 1] - self.pts[k]
+        return p, t / np.linalg.norm(t)
+
+    def frame_at(self, s, across=(1, 0, 0)):
+        """(R, t) whose local y runs along the curve and local x leans toward `across`."""
+        p, t = self.at_length(s)
+        x = np.asarray(across, F)
+        x = x - t * (x @ t)
+        x /= np.linalg.norm(x)
+        z = np.cross(x, t)
+        return np.stack([x, t, z], 1).astype(F), p.astype(F)
+
+
+class Sweep(Leaf):
+    """A round tube along a curve; radius runs from r0 at the start to r1 at the end."""
+
+    def __init__(self, curve, r0, mat, r1=None):
+        self.curve, self.r0, self.mat = curve, r0, mat
+        self.r1 = r0 if r1 is None else r1
+
+    def sd(self, p):
+        pts, arc = self.curve.pts, self.curve.arc
+        best = np.full(len(p), 1e9, F)
+        best_s = np.zeros(len(p), F)
+        for k in range(len(pts) - 1):
+            a, b = pts[k], pts[k + 1]
+            ab = b - a
+            t = np.clip((p - a) @ ab / (ab @ ab), 0, 1)
+            d = length(p - a - t[:, None] * ab)
+            closer = d < best
+            best = np.where(closer, d, best)
+            best_s = np.where(closer, arc[k] + t * (arc[k + 1] - arc[k]), best_s)
+        f = best_s / self.curve.length
+        return best - (self.r0 + (self.r1 - self.r0) * f)
+
+    def bounds(self):
+        r = max(self.r0, self.r1)
+        return self.curve.pts.min(0) - r, self.curve.pts.max(0) + r

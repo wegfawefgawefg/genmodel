@@ -17,13 +17,26 @@ if(NOT SDL3_FOUND)
     add_library(SDL3::SDL3 ALIAS PkgConfig::SDL3)
 endif()
 
+# s-expression data files (rig, animation), pinned like Mans In My House
+include(FetchContent)
+set(GSEXP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GSEXP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(gsexp GIT_REPOSITORY https://github.com/wegfawefgawefg/gsexp.git
+    GIT_TAG a095211f2ea61ec3824fdd783f6b8ad5fe099d13)
+FetchContent_MakeAvailable(gsexp)
+
 add_executable(viewer
     src/main.cpp
     src/model.cpp
     src/draw.cpp
     src/headless.cpp
     src/images.cpp
+    src/asset.cpp
+    src/rig.cpp
+    src/anim_load.cpp
+    src/anim_eval.cpp
+    src/sexp_read.cpp
 )
 target_include_directories(viewer PRIVATE src /usr/include/stb)
 target_compile_definitions(viewer PRIVATE GL_GLEXT_PROTOTYPES)
-target_link_libraries(viewer PRIVATE SDL3::SDL3 OpenGL::OpenGL OpenGL::EGL)
+target_link_libraries(viewer PRIVATE SDL3::SDL3 OpenGL::OpenGL OpenGL::EGL gsexp::gsexp)

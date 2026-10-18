@@ -96,7 +96,7 @@ def shade(scene, p, n, unit):
     """Albedo (linear) and spec for texel points p with normals n. unit is a typical
     detail size in model units, used for wear widths and noise scale."""
     nodes = scene.bake_nodes()
-    count = len(p)
+    solid = scene.bake_nodes(include_free=False)
     _, mat = scene.union_eval(p - n * unit * 0.05, nodes)
     mats = scene.materials
     base = np.array([to_lin(m.color) for m in mats], F)[mat]
@@ -108,7 +108,7 @@ def shade(scene, p, n, unit):
     glow = kind == "glow"
 
     def dist(q):
-        return scene.union_eval(q, nodes, pad=unit * 8)[0]
+        return scene.union_eval(q, solid, pad=unit * 8)[0]
 
     # curvature: positive on convex edges, negative in creases and grooves
     curv = laplacian(dist, p, unit * 0.6) * unit * 0.6

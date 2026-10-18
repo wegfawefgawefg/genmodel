@@ -15,19 +15,19 @@ namespace fs = std::filesystem;
 namespace {
 
 struct Corner {
-    int v, t, n;
-    bool operator==(const Corner& o) const { return v == o.v && t == o.t && n == o.n; }
+    int v, t, n, g;
+    bool operator==(const Corner& o) const { return v == o.v && t == o.t && n == o.n && g == o.g; }
 };
 
 struct CornerHash {
     size_t operator()(const Corner& c) const {
-        return (size_t)c.v * 73856093u ^ (size_t)c.t * 19349663u ^ (size_t)c.n * 83492791u;
+        return (size_t)c.v * 73856093u ^ (size_t)c.t * 19349663u ^ (size_t)c.n * 83492791u ^ (size_t)c.g * 2654435761u;
     }
 };
 
 // "12/7/3" -> zero-based indices, missing parts become -1
 Corner parse_corner(const char* s) {
-    Corner c = {-1, -1, -1};
+    Corner c = {-1, -1, -1, 0};
     int parts[3] = {0, 0, 0};
     int which = 0;
     const char* p = s;
@@ -105,9 +105,14 @@ bool load_model(const std::string& obj_path, Model& out) {
 
     // read lines, dedupe corners into vertices
     std::string line;
+    int group = 0;
+    m.groups.push_back("root");
     while (std::getline(f, line)) {
         const char* s = line.c_str();
-        if (s[0] == 'v' && s[1] == ' ') {
+        if (s[0] == 'g' && s[1] == ' ') {
+            m.groups.push_back(line.substr(2));
+            group = (int)m.groups.size() - 1;
+        } else if (s[0] == 'v' && s[1] == ' ') {
             float x, y, z;
             sscanf(s + 2, "%f %f %f", &x, &y, &z);
             pos.insert(pos.end(), {x, y, z});
@@ -125,6 +130,7 @@ bool load_model(const std::string& obj_path, Model& out) {
             std::vector<uint32_t> face;
             while (ss >> tok) {
                 Corner c = parse_corner(tok.c_str());
+                c.g = group;
                 auto it = seen.find(c);
                 if (it != seen.end()) {
                     face.push_back(it->second);
@@ -145,6 +151,7 @@ bool load_model(const std::string& obj_path, Model& out) {
                 }
                 uint32_t id = (uint32_t)m.verts.size();
                 m.verts.push_back(v);
+                m.vertex_group.push_back(group);
                 seen[c] = id;
                 face.push_back(id);
             }

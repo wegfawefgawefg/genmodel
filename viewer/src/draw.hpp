@@ -1,6 +1,8 @@
 #pragma once
 
+#include "anim.hpp"
 #include "model.hpp"
+#include "rig.hpp"
 
 #include <cstdint>
 
@@ -22,6 +24,7 @@ struct Gpu {
     uint32_t texture = 0;
     uint32_t empty_vao = 0;
     int index_count = 0;
+    int additive_first = 0; // triangles of additive parts sit at the end of the index buffer
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };
@@ -32,6 +35,9 @@ struct DrawOptions {
     bool show_uv = false; // show the uv layout as a checker
 };
 
+const int max_parts = 128;
+
 bool gpu_init(Gpu& gpu);
-void gpu_upload(Gpu& gpu, const Model& model);
-void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, int width, int height);
+// binds each vertex to its rig part by obj group name
+void gpu_upload(Gpu& gpu, Model& model, const Rig& rig);
+void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const Pose& pose, int width, int height);

@@ -9,12 +9,14 @@ import math
 from PIL import Image, ImageDraw, ImageFont
 
 import sdf
-from scene import Decal, Material, Piece, Scene, instanced
+import numpy as np
+
+from scene import Decal, Material, Part, Path, Piece, Scene, instance_parts, instanced
 from sdf import Box, Cut, Cylinder, Prism, Repeat, Torus, Union, compose, segment, translate, turn
 
 UNIT = 0.08
 
-TEAL, WHITE, RED, GUNMETAL, BRASS, BLACK, STEEL, LENS, RUBBER = range(9)
+TEAL, WHITE, RED, GUNMETAL, BRASS, BLACK, STEEL, LENS, RUBBER, FLASH, FLASH_TIP = range(11)
 
 MATERIALS = [
     Material("teal", (100, 200, 188), 0.35, "paint", (196, 206, 196)),
@@ -26,6 +28,8 @@ MATERIALS = [
     Material("steel", (104, 98, 88), 0.7, "metal"),
     Material("lens", (255, 40, 30), 0.9, "glow"),
     Material("rubber", (22, 22, 24), 0.1, "rubber"),
+    Material("flash", (255, 214, 140), 0.0, "glow"),
+    Material("flash_tip", (240, 70, 14), 0.0, "glow"),
 ]
 
 UPPER_Y, UPPER_Z = 1.15, -0.1
@@ -35,6 +39,14 @@ DRUM_C = (4.55, -3.0, -0.55)
 DRUM_TILT = 30.0
 DRUM_LEN = 2.65  # half length
 DRUM_R = 1.95
+GEAR = (2.75, 0.45, 0.68)
+PORT = (5.35, 1.15, 0.95)  # where spent cases leave the receiver
+N_CASES = 16
+
+
+def drum_point(x, y, z):
+    """Drum-local point (axis along x) to model space."""
+    return sdf.rotation("z", DRUM_TILT) @ np.array([x, y, z], np.float32) + np.array(DRUM_C, np.float32)
 
 
 def barrel(name, y, z, muzzle_x, spring_x0):
@@ -48,7 +60,8 @@ def barrel(name, y, z, muzzle_x, spring_x0):
     collar = Cylinder(0.36, 0.16, GUNMETAL, r_edge=0.03).at(spring_x0 - 0.1, 0, 0)
     n_rings = int((rear - 0.35 - spring_x0) / 0.16)
     rings = [translate(spring_x0 + 0.15 + 0.16 * i, y, z) for i in range(n_rings)]
-    spring = instanced(name + "_spring", Torus(0.35, 0.085, GUNMETAL), rings, h=0.012, tris=40)
+    spring = instanced(name + "_spring", Torus(0.35, 0.085, GUNMETAL), rings, h=0.012, tris=40,
+                       part=name + "_spring", part_each=True)
     coil_core = Cylinder(0.27, (rear - spring_x0) * 0.5, GUNMETAL).at((rear + spring_x0) * 0.5, 0, 0)
     band_x = muzzle_x + 2.3
     bands = Union(
@@ -70,11 +83,29 @@ def barrel(name, y, z, muzzle_x, spring_x0):
     )
 
     body = Union(tube, thin, jacket, nut, collar, coil_core, bands, brake, neck, gas, gas_block).at(0, y, z)
-    pc = Piece(name, body, h=0.024, tris=1300)
+    pc = Piece(name, body, h=0.024, tris=1300, part=name)
     # knurled grip band on the gas tube
     knurl = Repeat(Box(0.012, 0.2, 0.2, GUNMETAL).at(0, -0.36, 0.05), (0.05, 0, 0), 16).at(spring_x0 - 0.6, y, z)
     pc.cut(knurl)
-    return [pc, spring]
+    return [pc, spring, muzzle_flash(name + "_flash", muzzle_x, y, z)]
+
+
+def muzzle_flash(name, muzzle_x, y, z):
+    """A star of flame cones off the muzzle, hidden at rest and blown up on each shot."""
+    tip = muzzle_x - 0.05
+    core = sdf.Cone(0.0, 0.48, 0.55, FLASH).at(tip - 0.55, 0, 0)
+    burst = sdf.Cone(0.2, 0.8, 0.12, FLASH).at(tip - 0.2, 0, 0)
+    petals = []
+    for a in np.radians([45, 135, 225, 315]):
+        # cones point at their -x end; aim that end outward and a little forward
+        out = np.array([-0.55, 0.83 * math.cos(a), 0.83 * math.sin(a)], np.float32)
+        centre = np.array([tip - 0.15, 0, 0], np.float32) + out * 0.5
+        petals.append(sdf.Xform(sdf.Cone(0.0, 0.13, 0.5, FLASH), sdf.frame_from_x(-out), centre))
+    puff = sdf.Sphere(0.36, FLASH).at(tip - 0.2, 0, 0)
+    body = Union(core, burst, puff, *petals, k=0.15)
+    # white hot at the muzzle, orange further out
+    body = sdf.Paint(body, Cut(sdf.Sphere(4.0, 0), sdf.Sphere(0.5, 0).at(tip - 0.15, 0, 0)), FLASH_TIP)
+    return Piece(name, body.at(0, y, z), h=0.02, tris=260, part=name, free=True)
 
 
 def upper_housing():
@@ -95,7 +126,7 @@ def upper_housing():
         Cylinder(0.12, 0.08, STEEL, r_edge=0.03).at(-1.36, 1.55, UPPER_Z + 0.35),
         Cylinder(0.1, 0.08, STEEL, r_edge=0.03).at(-1.36, 1.3, UPPER_Z - 0.3),
     )
-    body = Union(Union(shell, boss, k=0.12), cap, lens, lens_ring, latch, top_knob, front_plug)
+    body = Union(Union(shell, boss, k=0.12), cap, lens_ring, latch, top_knob, front_plug)
 
     # teal sweeps up from the boss toward the back; a red band over the top
     sweep = [(0.45, 0.3), (0.62, 0.9), (1.3, 1.62), (2.5, 2.12), (3.15, 2.6), (3.4, 3.7), (7.0, 3.7), (7.0, 0.3)]
@@ -108,7 +139,7 @@ def upper_housing():
     pc.cut(Box(2.5, 0.02, 1.0, WHITE).at(3.6, 2.55, UPPER_Z))
     for x, yy in ((-0.9, 1.15), (0.3, 2.6), (2.3, 2.5), (3.9, 2.5), (5.6, 2.55), (-0.9, 2.65)):
         pc.cut(Torus(0.05, 0.015, STEEL, axis="z").at(x, yy, UPPER_Z + 0.75))
-    return pc
+    return [pc, Piece("lens", lens, h=0.015, tris=60, part="lens")]
 
 
 def lower_housing():
@@ -133,14 +164,16 @@ def core():
     """The dark receiver between the housings: feed cover, gear, chute down to the drum."""
     block = Box(2.0, 1.85, 0.62, GUNMETAL, ch=0.08).at(4.05, 0.55, 0)
     cover = Box(1.15, 0.55, 0.72, GUNMETAL, ch=0.1).at(3.95, 1.85, 0.05)
+    gx, gy, gz = GEAR
     gear = Union(
-        Cylinder(0.7, 0.12, GUNMETAL, axis="z", r_edge=0.04).at(2.75, 0.45, 0.68),
-        Cylinder(0.45, 0.1, STEEL, axis="z", r_edge=0.03).at(2.75, 0.45, 0.82),
-        Cylinder(0.15, 0.08, GUNMETAL, axis="z", r_edge=0.03).at(2.75, 0.45, 0.94),
+        Cylinder(0.7, 0.12, GUNMETAL, axis="z", r_edge=0.04).at(gx, gy, gz),
+        Cylinder(0.45, 0.1, STEEL, axis="z", r_edge=0.03).at(gx, gy, gz + 0.14),
+        Cylinder(0.15, 0.08, GUNMETAL, axis="z", r_edge=0.03).at(gx, gy, gz + 0.26),
+        Box(0.05, 0.4, 0.04, STEEL, r=0.02).at(gx, gy, gz + 0.25),
     )
     chute = Box(1.0, 0.75, 0.55, GUNMETAL, ch=0.08).rot("z", -12).at(4.6, -1.35, 0.1)
     rear_rail = Box(1.6, 0.4, 0.5, GUNMETAL, ch=0.06).at(7.0, 2.55, -0.05)
-    hose = sdf.Capsule((5.3, 1.9, 0.55), (6.6, 1.95, 0.6), 0.09, RUBBER)
+    hose = sdf.Sweep(sdf.Curve([(5.2, 1.7, 0.5), (5.6, 2.35, 0.95), (6.4, 1.3, 0.9), (6.9, 1.95, 0.55)]), 0.09, RUBBER)
     red_clip = Box(0.18, 0.1, 0.1, RED, r=0.03).at(7.6, 2.3, 0.55)
     fittings = Union(
         sdf.Capsule((2.4, -0.9, 0.8), (2.9, -0.5, 0.85), 0.12, TEAL),
@@ -148,24 +181,35 @@ def core():
         Cylinder(0.17, 0.08, TEAL, axis="z", r_edge=0.04).at(2.4, -0.9, 0.86),
         sdf.bolt(0.1, 0.1, STEEL).at(2.4, -0.9, 0.93),
     )
-    body = Union(block, cover, gear, chute, rear_rail, hose, red_clip, fittings)
-    pc = Piece("core", body, h=0.03, tris=2200)
+    body = Union(block, chute, rear_rail, hose, red_clip, fittings)
+    pc = Piece("core", body, h=0.03, tris=2000)
     pc.cut(Box(1.5, 0.02, 1.0, GUNMETAL).at(4.6, 1.05, 0))
-    pc.cut(Torus(0.3, 0.02, GUNMETAL, axis="z").at(2.75, 0.45, 0.92))
-    at_gear = translate(2.75, 0.45, 0.68)
-    spots = [compose(at_gear, compose(turn("z", 20 * i), translate(0.72, 0, 0))) for i in range(18)]
-    teeth = instanced("gear_teeth", Box(0.08, 0.06, 0.1, GUNMETAL, ch=0.02), spots, h=0.01, tris=12)
+    gear_pc = Piece("gear", gear, h=0.02, tris=300, part="gear")
+    gear_pc.cut(Torus(0.3, 0.02, GUNMETAL, axis="z").at(gx, gy, gz + 0.24))
+    spots = [compose(translate(*GEAR), compose(turn("z", 20 * i), translate(0.72, 0, 0))) for i in range(18)]
+    teeth = instanced("gear_teeth", Box(0.08, 0.06, 0.1, GUNMETAL, ch=0.02), spots, h=0.01, tris=12, part="gear")
     ribs = instanced("cover_ribs", Box(0.05, 0.08, 0.68, STEEL, r=0.025),
-                     [translate(3.05 + 0.22 * i, 2.42, 0.05) for i in range(8)], h=0.012, tris=24)
-    return [pc, teeth, ribs]
+                     [translate(3.05 + 0.22 * i, 2.42, 0.05) for i in range(8)], h=0.012, tris=24, part="cover")
+    cover_pc = Piece("cover", cover, h=0.03, tris=150, part="cover")
+    return [pc, gear_pc, teeth, cover_pc, ribs]
+
+
+BELT_PITCH = 0.2
+BELT_START = 0.1
+
+
+def belt_curve():
+    """The belt climbs out of the drum's top, bowing outward under its own weight, into the feed."""
+    p0 = drum_point(-0.45, DRUM_R - 0.1, 1.0)
+    p3 = np.array([4.15, 1.2, 1.05], np.float32)
+    h1 = p0 + np.array([-0.2, 1.1, 0.75], np.float32)
+    h2 = p3 + np.array([0.45, -1.25, 0.55], np.float32)
+    return [p0, h1, h2, p3]
 
 
 def belt():
-    """Cartridge belt from the feed down into the drum."""
-    top = (4.2, 1.15)
-    bottom = (5.1, -3.55)
-    n = 25
-    step = ((bottom[0] - top[0]) / (n - 1), (bottom[1] - top[1]) / (n - 1), 0)
+    """Cartridge links riding the belt curve, each its own part so the animator can feed them."""
+    curve = sdf.Curve(belt_curve())
     link = Union(
         Box(0.72, 0.07, 0.24, STEEL, ch=0.03),
         Box(0.09, 0.09, 0.3, STEEL, ch=0.02).at(-0.45, 0, 0),
@@ -173,14 +217,22 @@ def belt():
         Cylinder(0.075, 0.25, BRASS, r_edge=0.03).at(0.95, 0.03, 0),
         sdf.Cone(0.075, 0.025, 0.1, BRASS).at(1.28, 0.03, 0),
     )
-    spots = [translate(top[0] + step[0] * i, top[1] + step[1] * i, 1.12) for i in range(n)]
-    # stop where the belt meets the drum
-    can = Cylinder(DRUM_R + 0.2, DRUM_LEN, BLACK).rot("z", DRUM_TILT).at(*DRUM_C)
-    spots = [sp for sp in spots if can.dist(sp[1][None, :])[0] > 0.05]
-    links = instanced("belt", link, spots, h=0.012, tris=90)
-    # guide that carries the belt off the feed
-    guide = Box(0.75, 0.3, 0.45, GUNMETAL, ch=0.06).at(top[0] + 0.1, top[1] + 0.25, 0.85)
+    n = int(curve.length / BELT_PITCH)
+    spots = [curve.frame_at(BELT_START + i * BELT_PITCH) for i in range(n)]
+    links = instanced("belt", link, spots, h=0.012, tris=90, part="belt", part_each=True)
+    # guide that carries the belt into the feed
+    guide = Box(0.75, 0.3, 0.45, GUNMETAL, ch=0.06).at(4.25, 1.45, 0.85)
     return [links, Piece("belt_guide", guide, h=0.03, tris=60)]
+
+
+def casings():
+    """Spent cases waiting inside the port; the animator throws them one per shot."""
+    case = Union(
+        Cylinder(0.075, 0.24, BRASS, r_edge=0.02),
+        Cylinder(0.085, 0.02, BRASS, r_edge=0.01).at(0.23, 0, 0),
+    )
+    spots = [translate(*PORT) for _ in range(N_CASES)]
+    return instanced("casings", case, spots, h=0.01, tris=40, part="case", part_each=True, free=True)
 
 
 def drum():
@@ -203,13 +255,15 @@ def drum():
         segment((-L + 1.6, 0.7, 1.98), (L + 0.2, 0.7, 1.98), 0.09, TEAL, 0.03),
         segment((L + 0.6, -1.45, 1.52), (L + 0.6, 1.0, 1.2), 0.1, TEAL, 0.03),
     )
-    body = Union(can, front, face, trim, back, rails)
+    body = Union(can, front, trim, back, rails)
     body = body.rot("z", DRUM_TILT).at(*DRUM_C)
+    face = face.rot("z", DRUM_TILT).at(*DRUM_C)
     place = compose(translate(*DRUM_C), turn("z", DRUM_TILT))
     spots = [compose(place, compose(translate(-L + 0.7, 0, 0), compose(turn("x", 15 + 60 * i), translate(0, R + 0.13, 0))))
              for i in range(6)]
-    bolts = instanced("drum_bolts", sdf.bolt(0.12, 0.14, STEEL, axis="y"), spots, h=0.01, tris=40)
-    return [Piece("drum", body, h=0.035, tris=2400), bolts]
+    bolts = instanced("drum_bolts", sdf.bolt(0.12, 0.14, STEEL, axis="y"), spots, h=0.01, tris=40, part="drum")
+    return [Piece("drum", body, h=0.035, tris=2200, part="drum"), Piece("drum_face", face, h=0.025, tris=500, part="drum_face"),
+            bolts]
 
 
 def rear_frame():
@@ -296,15 +350,44 @@ def decals():
     ]
 
 
+def rig(pieces):
+    """Parts and their pivots. Everything not listed rides root."""
+    up_rear, low_rear = (-1.0, UPPER_Y, UPPER_Z), (-1.0, LOWER_Y, LOWER_Z)
+    parts = [
+        Part("root", "", (3.5, 0.6, 0.0)),
+        Part("upper_barrel", "root", up_rear),
+        Part("lower_barrel", "root", low_rear),
+        Part("upper_barrel_flash", "upper_barrel", (-7.95, UPPER_Y, UPPER_Z), additive=True),
+        Part("lower_barrel_flash", "lower_barrel", (-8.95, LOWER_Y, LOWER_Z), additive=True),
+        Part("gear", "root", GEAR),
+        Part("cover", "root", (2.85, 2.35, 0.05)),
+        Part("lens", "root", (-1.33, 2.62, UPPER_Z)),
+        Part("drum", "root", (4.4, -0.9, -0.3)),
+        Part("drum_face", "drum", tuple(drum_point(-DRUM_LEN, 0, 0))),
+    ]
+    by_name = {pc.name: pc for pc in pieces}
+    parts += instance_parts(by_name["upper_barrel_spring"], "root")
+    parts += instance_parts(by_name["lower_barrel_spring"], "root")
+    parts += instance_parts(by_name["casings"], "")
+    links = instance_parts(by_name["belt"], "root")
+    curve = belt_curve()
+    parts += links
+    parts += [Part("belt_h1", "root", tuple(curve[1])), Part("belt_h2", "root", tuple(curve[2]))]
+    paths = [Path("belt", "root", [tuple(p) for p in curve], [pt.name for pt in links], BELT_PITCH, BELT_START, "drum")]
+    return parts, paths
+
+
 def build():
     pieces = [
         *barrel("upper_barrel", UPPER_Y, UPPER_Z, -7.9, -3.9),
         *barrel("lower_barrel", LOWER_Y, LOWER_Z, -8.9, -4.3),
-        upper_housing(),
+        *upper_housing(),
         lower_housing(),
         *core(),
         *belt(),
+        casings(),
         *drum(),
         rear_frame(),
     ]
-    return Scene("liedersanger", MATERIALS, pieces, decals(), texture_size=2048, scale=0.25)
+    parts, paths = rig(pieces)
+    return Scene("liedersanger", MATERIALS, pieces, decals(), texture_size=2048, scale=0.25, parts=parts, paths=paths)
