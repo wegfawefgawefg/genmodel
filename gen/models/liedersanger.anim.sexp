@@ -142,12 +142,13 @@
     (curl 0.022 0.15) (wind 0.06 0 -0.02) (size 0.03 0.26 1.2) (color 0.74 0.76 0.8 0.24))
 
   ; sound: every shot, panned toward the barrel that fired; cases land on their own cue;
-  ; the gear whine climbs with the fire rate, the motor whirrs up on its spin curve,
+  ; the gear whine climbs with the fire rate, motor and gears wind up on the spin curve,
   ; the barrels sizzle while they smoulder; the settle vents
   (on-shot (every 2 0) (sound shot (pan -0.3)))
   (on-shot (every 2 1) (sound shot (pan 0.3)))
   (on-shot (sound case))
   (sound settle (at 6.15))
   (hum whine (by rate 0.125) (pitch 0.4 0.8))
-  (hum whirr (by spin 1) (pitch 0.22 0.95))
+  (hum motor (by spin 1) (pitch 0.4 0.85))
+  (hum gears (by spin 1) (pitch 0.45 0.9))
   (hum sizzle (by sizzle 1) (pitch 0.95 1.05)))

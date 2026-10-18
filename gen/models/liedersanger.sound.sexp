@@ -26,7 +26,9 @@
   (sample case-a (file casing_5.mp3) (cut 0.66) (fade 0.002 0.1) (room 0.15))
   (sample case-b (file casing_7.mp3) (fade 0.002 0.2) (room 0.15))
   (sample whine (file gear_spin_loop.mp3) (loop))
-  (sample whirr (synth whirr) (length 2) (loop))
+  ; the motor and gear train: steady stretches of real machines, looped and pitched down
+  (sample motor (file machine_startup.mp3) (cut 3.0 9.0) (loop))
+  (sample gears (file gearbox.mp3) (cut 4.0 10.0) (loop))
   (sample sizzle (synth sizzle) (length 4) (loop))
   (sample hiss (synth hiss) (length 1.6) (fade 0.001 0.3))
 
@@ -49,11 +51,13 @@
   (cue settle
     (layer hiss (gain 0.3) (pitch 0.95 1.05)))
 
-  ; loops driven by the animation: gear whine with the fire rate, the motor's wind-up,
-  ; and the hot barrels sizzling
+  ; loops driven by the animation: gear whine with the fire rate, the motor and gears
+  ; winding up and down on the spin curve, and the hot barrels sizzling
   (cue whine
     (layer whine (gain 0.03)))
-  (cue whirr
-    (layer whirr (gain 0.16)))
+  (cue motor
+    (layer motor (gain 0.2)))
+  (cue gears
+    (layer gears (gain 0.16)))
   (cue sizzle
     (layer sizzle (gain 0.09))))

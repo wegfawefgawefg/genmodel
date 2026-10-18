@@ -148,10 +148,12 @@ def prepare(form, src_dir):
             x = seamless(x, 0.1)
     else:
         x = decode(os.path.join(src_dir, field(form, "file")[0]))
-    cut = field(form, "cut", [])
-    start = float(cut[0]) if cut else 0.0
-    end = float(cut[1]) if len(cut) > 1 else None
-    x = x[int(start * SR) : int(end * SR) if end else None].copy()
+        cut = field(form, "cut", [])
+        start = float(cut[0]) if cut else 0.0
+        end = float(cut[1]) if len(cut) > 1 else None
+        x = x[int(start * SR) : int(end * SR) if end else None].copy()
+        if field(form, "loop") is not None:
+            x = seamless(x, 0.15)
     if field(form, "highpass"):
         b, a = signal.butter(2, float(field(form, "highpass")[0]) / (SR / 2), "high")
         x = signal.lfilter(b, a, x)
