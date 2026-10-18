@@ -4,8 +4,8 @@ forward. Rest angles come from the assembly's turns, so joints read at natural a
 
 import sdf
 from mech import MechPart, housing, knuckle, socket
-from models.scoobee import (ANKLE, BALL, CHROME, DARK, ELBOW, GLASS, GRIP, HIP, KNEE, OLIVE, ORANGE, RUBBER, RUST,
-                            SHOULDER, TAN, WRIST)
+from models.scoobee import (ANKLE, BALL, CHROME, DARK, ELBOW, FLAP, GLASS, GRIP, HIP, KNEE, OLIVE, ORANGE, RUBBER, RUST,
+                            SHOULDER, SPUR, TAN, WRIST)
 from models.scoobee.kit import bolt_ring, bolts, hose, piston
 from scene import Piece
 from sdf import Box, Cylinder, Loft, Prism, Union, segment
@@ -57,11 +57,21 @@ def shin():
     pieces = [Piece("shell", shell, h=0.03, tris=340), Piece("gear", Union(spine, joints), h=0.02, tris=600)]
     pieces[0].cut(Box(1.0, 0.007, 1.0, TAN).at(0, -1.45, 0))
     pieces[0].cut(Box(0.007, 0.7, 1.0, TAN).at(0, -0.85, 0.3))
-    return MechPart("shin", pieces, {"ankle": socket("ankle", ANKLE, *ankle_at)})
+    return MechPart("shin", pieces, {"ankle": socket("ankle", ANKLE, *ankle_at),
+                                     "flap": socket("flap", FLAP, 0.24, -0.78, 0.18)})
+
+
+def shin_flap():
+    """A smaller cup flap over the shin's intake, opening with speed like the body's."""
+    from models.scoobee.kit import cup_flap
+    cup = cup_flap(0.13, 0.55, TAN, 0.02)
+    hinge = Cylinder(0.022, 0.08, DARK, axis="y", ch=0.008)
+    return MechPart("shin_flap", [Piece("cup", cup, h=0.014, tris=160, mesher="contour"), Piece("hinge", hinge, h=0.015, tris=24)], {})
 
 
 FOOT_SCALE = 1.5
 BALL_AT = (0.0, -0.24 * FOOT_SCALE, 0.32 * FOOT_SCALE)
+SPUR_AT = (0.0, -0.3, -0.13)
 
 
 def foot():
@@ -71,26 +81,33 @@ def foot():
     block = Box(0.11, 0.08, 0.13, DARK, ch=0.03).at(0, -0.1, 0)
     instep = Box(0.13, 0.06, 0.2, TAN, ch=0.05).rot("x", 16).at(0, -0.17, 0.16)
     instep = sdf.Paint(instep, Box(1.0, 1.0, 0.04, ORANGE).at(0, 0, 0.24), ORANGE)
-    heel = Box(0.05, 0.035, 0.12, DARK, ch=0.02).rot("x", -8).at(0, -0.25, -0.14)
-    heel_pad = Box(0.06, 0.015, 0.08, RUBBER, ch=0.006).at(0, -0.29, -0.15)
     # a solid triangular heel plate from the ankle block back to the calf ram's pin
     lug = Union(Prism([(-0.02, -0.05), (-0.2, -0.1), (-0.12, -0.22)], 0.025, DARK, r=0.006, plane="yz"),
                 Cylinder(0.025, 0.035, DARK, axis="x", ch=0.006).at(0, -0.12, -0.22))
     # authored small, then scaled up round the ankle (the knuckle stays the joint's size)
-    big = sdf.Scale(Union(block, instep, heel, heel_pad, lug), k)
-    body = Union(knuckle(ANKLE, DARK), big, housing(BALL, DARK).at(*BALL_AT))
-    return MechPart("foot", [Piece("foot", body, h=0.015, tris=400)], {"ball": socket("ball", BALL, *BALL_AT)})
+    big = sdf.Scale(Union(block, instep, lug), k)
+    body = Union(knuckle(ANKLE, DARK), big, housing(BALL, DARK).at(*BALL_AT), housing(SPUR, DARK).at(*SPUR_AT))
+    return MechPart("foot", [Piece("foot", body, h=0.015, tris=400)],
+                    {"ball": socket("ball", BALL, *BALL_AT), "spur": socket("spur", SPUR, *SPUR_AT)})
+
+
+def spur():
+    """The back toe: a sprung blade behind the heel that folds up under load (the gait works it)."""
+    blade = Union(segment((0, 0, 0), (0, -0.1, -0.3), 0.04, DARK), knuckle(SPUR, DARK),
+                  Box(0.05, 0.03, 0.07, RUST, ch=0.015).rot("x", -15).at(0, -0.11, -0.33),
+                  Box(0.055, 0.012, 0.06, RUBBER, ch=0.005).at(0, -0.14, -0.33))
+    return MechPart("spur", [Piece("spur", blade, h=0.012, tris=120)], {})
 
 
 def toes():
-    """Three long splayed toes with rust tips and rubber pads, hinged at the ball."""
+    """Two long splayed front toes with rust tips and rubber pads, hinged at the ball."""
     k = FOOT_SCALE
     toes_, pads = [], []
-    for ang, length in ((-22, 0.26), (0, 0.3), (22, 0.26)):
-        toe = Union(Box(0.045, 0.035, length * 0.5, DARK, ch=0.02).at(0, 0, length * 0.5),
+    for ang, length in ((-14, 0.3), (14, 0.3)):
+        toe = Union(Box(0.06, 0.04, length * 0.5, DARK, ch=0.022).at(0, 0, length * 0.5),
                     Box(0.04, 0.03, 0.05, RUST, ch=0.015).rot("x", 18).at(0, -0.01, length + 0.02))
         toes_.append(toe.rot("y", ang).at(0, 0, 0.02))
-        pads.append(Box(0.05, 0.015, length * 0.4, RUBBER, ch=0.006).at(0, -0.04, length * 0.55).rot("y", ang).at(0, 0, 0.02))
+        pads.append(Box(0.065, 0.015, length * 0.4, RUBBER, ch=0.006).at(0, -0.045, length * 0.55).rot("y", ang).at(0, 0, 0.02))
     body = Union(knuckle(BALL, DARK), sdf.Scale(Union(*toes_, *pads), k))
     return MechPart("toes", [Piece("toes", body, h=0.012, tris=260)], {})
 
@@ -123,28 +140,59 @@ def forearm():
     return MechPart("forearm", pieces, {"wrist": socket("wrist", WRIST, *wrist_at)})
 
 
+def finger(base, splay, curl, lengths, r):
+    """A jointed finger from base: segments bending by `curl` degrees each about x (toward +z),
+    splayed sideways by `splay`; knuckle balls join the segments so nothing floats."""
+    import numpy as np
+    p = np.asarray(base, np.float32)
+    parts = [sdf.Sphere(r * 1.25, DARK).at(*p)]
+    ang = 0.0
+    for i, l in enumerate(lengths):
+        ang += curl
+        d = np.array([np.sin(np.radians(splay)), -np.cos(np.radians(ang)), np.sin(np.radians(ang))], np.float32)
+        d /= np.linalg.norm(d)
+        q = p + d * l
+        parts.append(segment(p, q, r * (1 - 0.12 * i), CHROME if i else DARK))
+        parts.append(sdf.Sphere(r * (1.15 - 0.12 * i), DARK).at(*q))
+        p = q
+    parts.append(Box(r * 0.9, r * 0.6, r * 0.9, RUST, ch=r * 0.3).at(*p))
+    return Union(*parts)
+
+
 def claw():
-    """A palm block with three long jointed chrome fingers and a thumb; a grip socket."""
-    palm = Box(0.09, 0.08, 0.07, DARK, ch=0.025).at(0, -0.1, 0)
-    fingers = []
-    for x in (-0.055, 0.0, 0.055):
-        fingers.append(Box(0.02, 0.09, 0.022, CHROME, ch=0.008).at(x, -0.26, 0.03))
-        fingers.append(Box(0.018, 0.07, 0.02, CHROME, ch=0.008).rot("x", 28).at(x, -0.38, 0.08))
-    thumb = Box(0.02, 0.08, 0.02, CHROME, ch=0.008).rot("x", -35).at(0.0, -0.18, -0.09)
+    """A palm with three jointed fingers, splayed and curled round the grip, and an opposed
+    thumb; a grip socket where the weapon sits in the curl."""
+    palm = Union(Box(0.1, 0.09, 0.075, DARK, ch=0.03).at(0, -0.1, 0),
+                 Box(0.085, 0.03, 0.06, OLIVE, ch=0.015).at(0, -0.06, 0.07))
+    fingers = [finger((x, -0.18, 0.03), sp, 32, (0.1, 0.08, 0.06), 0.024) for x, sp in ((-0.07, -10), (0.0, 0), (0.07, 9))]
+    thumb = finger((0.09, -0.11, -0.05), 35, -30, (0.08, 0.07), 0.026)
     body = Union(knuckle(WRIST, DARK), palm, *fingers, thumb)
-    return MechPart("claw", [Piece("claw", body, h=0.012, tris=300)],
-                    {"grip": socket("grip", GRIP, -0.12, -0.36, 0.0)})
+    return MechPart("claw", [Piece("claw", body, h=0.01, tris=500)],
+                    {"grip": socket("grip", GRIP, 0.0, -0.3, 0.12)})
 
 
 def rifle():
-    """A long rifle held at the grip, barrel along -y (out along the forearm)."""
-    receiver = Box(0.075, 0.42, 0.12, OLIVE, ch=0.03).at(0, -0.15, 0.06)
-    barrel = Cylinder(0.04, 0.65, DARK, axis="y", ch=0.01).at(0, -1.25, 0.08)
-    shroud = Cylinder(0.07, 0.34, OLIVE, axis="y", ch=0.02).at(0, -0.78, 0.08)
-    brake = Cylinder(0.065, 0.08, DARK, axis="y", ch=0.02).at(0, -1.9, 0.08)
-    mag = Box(0.04, 0.1, 0.08, DARK, ch=0.015).rot("x", 10).at(0, -0.1, -0.09)
-    scope = Union(Cylinder(0.04, 0.14, DARK, axis="y", ch=0.01).at(0, -0.2, 0.22),
-                  Cylinder(0.035, 0.01, GLASS, axis="y").at(0, -0.35, 0.22))
-    stock = Box(0.05, 0.16, 0.07, RUST, ch=0.02).at(0, 0.26, -0.14)
-    body = Union(receiver, barrel, shroud, brake, mag, scope, stock, knuckle(GRIP, DARK))
-    return MechPart("rifle", [Piece("rifle", body, h=0.02, tris=360)], {})
+    """A huge sniper rifle, barrel along -y from the grip: long barrel in a shroud, a big
+    muzzle brake, a long scope on rings, a heavy magazine, a folded bipod and a skeleton stock."""
+    receiver = Box(0.11, 0.55, 0.17, OLIVE, ch=0.05).at(0, -0.25, 0.14)
+    shroud = Cylinder(0.11, 0.7, OLIVE, axis="y", ch=0.03).at(0, -1.45, 0.18)
+    barrel = Cylinder(0.06, 1.0, DARK, axis="y", ch=0.01).at(0, -2.6, 0.18)
+    brake = Union(Box(0.13, 0.22, 0.12, DARK, ch=0.04).at(0, -3.68, 0.18),
+                  *[Box(0.15, 0.025, 0.06, RUBBER, ch=0.01).at(0, -3.6 - 0.07 * k, 0.18) for k in range(3)])
+    scope = Union(Cylinder(0.075, 0.38, DARK, axis="y", ch=0.02).at(0, -0.5, 0.44),
+                  Cylinder(0.09, 0.06, DARK, axis="y", ch=0.02).at(0, -0.9, 0.44),
+                  Cylinder(0.07, 0.01, GLASS, axis="y").at(0, -0.97, 0.44),
+                  Box(0.04, 0.03, 0.08, DARK, ch=0.01).at(0, -0.35, 0.33),
+                  Box(0.04, 0.03, 0.08, DARK, ch=0.01).at(0, -0.7, 0.33))
+    mag = Box(0.08, 0.14, 0.18, DARK, ch=0.03).rot("x", 8).at(0, -0.3, -0.12)
+    bipod = Union(segment((0.05, -1.95, 0.08), (0.08, -1.3, -0.02), 0.022, DARK),
+                  segment((-0.05, -1.95, 0.08), (-0.08, -1.3, -0.02), 0.022, DARK),
+                  Box(0.08, 0.03, 0.04, DARK, ch=0.01).at(0, -1.97, 0.08))
+    stock = Union(Box(0.07, 0.22, 0.05, RUST, ch=0.02).at(0, 0.42, 0.18),
+                  Box(0.07, 0.05, 0.16, RUST, ch=0.02).at(0, 0.62, 0.08),
+                  segment((0, 0.25, 0.05), (0, 0.6, -0.02), 0.03, DARK))
+    grip = Union(Box(0.04, 0.05, 0.1, DARK, ch=0.015).at(0, 0, 0.02), knuckle(GRIP, DARK))
+    pieces = [Piece("rifle", Union(receiver, shroud, scope, stock), h=0.02, tris=500),
+              Piece("barrel", Union(barrel, brake, mag, bipod, grip), h=0.015, tris=500)]
+    pieces[0].cut(Box(0.12, 0.006, 0.18, OLIVE).at(0, -0.6, 0.14))
+    return MechPart("rifle", pieces, {})

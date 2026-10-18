@@ -54,13 +54,21 @@ class Checker:
         for pc in scene.pieces:
             if not pc.free:
                 self.bodies.setdefault(pc.part, []).append(pc.body)
+        self.raw_bodies = self.bodies
         self.pts = surface_points(os.path.join(ROOT, "out", name, name + ".obj"))
+        self.grounded = getattr(importlib.import_module("models." + name), "GROUNDED", False)
         # rest joint positions (each part's pivot) from the rig
         self.pivot = {}
+        dy = 0.0
         for line in open(os.path.join(ROOT, "out", name, name + ".rig.sexp")):
+            if line.startswith("; ground_dy"):
+                dy = float(line.split()[2])
             f = line.replace("(", " ").replace(")", " ").split()
             if len(f) >= 6 and f[0] == "part" and f[2] == "pivot":
                 self.pivot[f[1]] = np.array([float(x) for x in f[3:6]], np.float32)
+        # the build may have stood the model on the ground: move the SDFs the same way
+        if dy:
+            self.bodies = {p: [n.at(0, dy, 0) for n in ns] for p, ns in self.bodies.items()}
         # rest bounding spheres for a quick reject
         self.sphere = {}
         for part, nodes in self.bodies.items():
@@ -99,6 +107,14 @@ class Checker:
                 if a not in bones or a not in centres:
                     continue
                 wa = None
+                if self.grounded:
+                    wa = pa @ bones[a][:3, :3].T + bones[a][:3, 3]
+                    depth = float(-wa[:, 1].min())
+                    if depth > 0.01:
+                        total += depth
+                        key = (a, "ground")
+                        if depth > worst.get(key, (0, 0))[0]:
+                            worst[key] = (depth, t)
                 for b, nodes in self.bodies.items():
                     if b == a or b not in centres:
                         continue

@@ -309,6 +309,7 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
         case TrackKind::spark:
         case TrackKind::sound:
         case TrackKind::hum:
+        case TrackKind::lamp:
             break;
         default:
             run_continuous(a, tr, t, acc);

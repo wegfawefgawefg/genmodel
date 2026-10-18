@@ -23,7 +23,7 @@ struct EaseSpec {
 };
 
 // smoulder = heat * idle: hot but no longer firing; curve = a named (curve ...) of the anim
-enum class Driver { one, rate, heat, idle, smoulder, curve };
+enum class Driver { one, rate, heat, idle, smoulder, curve, speed };
 
 struct Drive {
     Driver driver = Driver::one;
@@ -44,7 +44,7 @@ struct Motion {
     Vec3 uv; // slides the part's tile texture (x = u, y = v)
 };
 
-enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean, wisp, puff, spark, sound, hum };
+enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean, wisp, puff, spark, sound, hum, lamp };
 
 struct Track {
     TrackKind kind = TrackKind::kick;
@@ -112,6 +112,7 @@ struct Anim {
     std::vector<float> shots; // times in one loop
     float table_dt = 1.0f / 480.0f;
     std::vector<float> rate_table, heat_table, idle_table;
+    std::vector<float> speed_table; // the gait's ground speed (m/s), for (by speed k)
     Gait gait; // (gait ...): legged locomotion with IK
 };
 

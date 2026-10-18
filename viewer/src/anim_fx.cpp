@@ -11,8 +11,10 @@ const float fx_dt = 1.0f / 120.0f;
 const float tau = 6.2831853f;
 
 bool is_fx(const Track& t) {
-    return t.kind == TrackKind::wisp || t.kind == TrackKind::puff || t.kind == TrackKind::spark;
+    return t.kind == TrackKind::wisp || t.kind == TrackKind::puff || t.kind == TrackKind::spark || t.kind == TrackKind::lamp;
 }
+
+bool follows_path(const Track& t) { return t.kind == TrackKind::wisp || t.kind == TrackKind::lamp; }
 
 // emitter position and launch direction (the track's dir in the part's frame) under a pose
 void emitter(const Track& t, const Pose& pose, Vec3& pos, Vec3& fwd) {
@@ -68,6 +70,26 @@ void run_wisp(const Anim& a, const Track& t, float now, Pose& out) {
     }
 }
 
+// a glowing lamp with a persistent afterglow: the light now, plus fading copies where it
+// was over the last `life` seconds, so it streaks when the body moves
+void run_lamp(const Anim& a, const Track& t, float now, Pose& out) {
+    float level = drive(a, t.by, now);
+    if (level <= 0.001f) return;
+    int n = std::max(t.count, 1);
+    for (int k = n - 1; k >= 0; k--) {
+        float back = t.life * (float)k / (float)n;
+        float fade = 1 - (float)k / (float)n;
+        FxSprite s;
+        s.pos = sample(t.path_pos, wrap_time(a, now - back));
+        s.size = t.size0 * (k == 0 ? 1.0f : 0.8f);
+        s.angle = 0;
+        s.color = t.color * (level * fade * fade * (k == 0 ? 1.6f : 0.7f));
+        s.alpha = 0;
+        s.tile = 3;
+        out.sprites.push_back(s);
+    }
+}
+
 // shot-launched particles; spark = additive and falling, puff = smoke that drags to a stop
 void run_burst(const Anim& a, const Track& t, float now, Pose& out) {
     bool spark = t.kind == TrackKind::spark;
@@ -115,8 +137,8 @@ void fx_prepare(Anim& a, const Rig& rig) {
     for (Track& t : a.tracks) {
         if (!is_fx(t)) continue;
         t.path_pos.clear(), t.path_fwd.clear(), t.shot_pos.clear(), t.shot_fwd.clear();
-        any_wisp |= t.kind == TrackKind::wisp;
-        any_burst |= t.kind != TrackKind::wisp;
+        any_wisp |= follows_path(t);
+        any_burst |= !follows_path(t);
     }
     Pose pose;
     Vec3 p, f;
@@ -126,7 +148,7 @@ void fx_prepare(Anim& a, const Rig& rig) {
         for (int i = 0; i < n; i++) {
             evaluate(a, rig, i * fx_dt, pose);
             for (Track& t : a.tracks) {
-                if (t.kind != TrackKind::wisp) continue;
+                if (!follows_path(t)) continue;
                 emitter(t, pose, p, f);
                 t.path_pos.push_back(p);
                 t.path_fwd.push_back(f);
@@ -165,7 +187,9 @@ void fx_evaluate(const Anim& a, float t, Pose& out) {
     out.ribbons.clear();
     t = wrap_time(a, t);
     for (const Track& tr : a.tracks) {
-        if (tr.kind == TrackKind::wisp && tr.path_pos.size() > 1) {
+        if (tr.kind == TrackKind::lamp && tr.path_pos.size() > 1) {
+            run_lamp(a, tr, t, out);
+        } else if (tr.kind == TrackKind::wisp && tr.path_pos.size() > 1) {
             run_wisp(a, tr, t, out);
         } else if ((tr.kind == TrackKind::puff || tr.kind == TrackKind::spark) && tr.shot_pos.size() == a.shots.size()) {
             run_burst(a, tr, t, out);

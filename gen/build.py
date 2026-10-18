@@ -28,7 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def mesh_element(node, pc, coarse, poly):
     """(verts, faces) for one node: clean polygons when asked and possible, else contoured
     and decimated to the piece's budget."""
-    if poly:
+    if poly and pc.mesher != "contour":
         m = polys.polygonize(node)
         if m is not None:
             return m
@@ -149,6 +149,16 @@ def main():
 
     print("meshing")
     v, f, face_part, face_piece, face_tile, face_tile_uv = mesh_pieces(scene, coarse, style.get("mesher") == "poly")
+    # standing models (GROUNDED = True) are dropped so their lowest point at rest is on y = 0
+    if getattr(mod, "GROUNDED", False):
+        dy = -float(v[:, 1].min())
+        v = v + np.array([0, dy, 0], F)
+        for pt in scene.parts:
+            pt.pivot = (pt.pivot[0], pt.pivot[1] + dy, pt.pivot[2])
+        for ph in scene.paths:
+            ph.points = [(p[0], p[1] + dy, p[2]) for p in ph.points]
+        scene.ground_dy = dy
+        print(f"  grounded: moved {dy * 100:+.1f} cm")
     if "flat" in style:
         v, n, f = meshing.crease_split(v, f, crease_deg=style["flat"])
     else:

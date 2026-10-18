@@ -44,6 +44,7 @@ Driver driver_named(const std::string& s, const Anim& a, int& curve) {
     if (s == "heat") return Driver::heat;
     if (s == "idle") return Driver::idle;
     if (s == "smoulder") return Driver::smoulder;
+    if (s == "speed") return Driver::speed;
     return Driver::one;
 }
 
@@ -100,6 +101,7 @@ TrackKind kind_named(const std::string& s, bool& ok) {
     if (s == "spark") return TrackKind::spark;
     if (s == "sound") return TrackKind::sound;
     if (s == "hum") return TrackKind::hum;
+    if (s == "lamp") return TrackKind::lamp;
     ok = false;
     return TrackKind::kick;
 }
@@ -287,6 +289,7 @@ void read_style(gsexp::Node form, GaitStyle& st) {
     st.shove = f.get_float("shove").value_or(st.shove);
     st.reach = f.get_float("reach").value_or(st.reach);
     st.invert = f.get_float("invert").value_or(st.invert);
+    st.give = f.get_float("give").value_or(st.give);
 }
 
 void read_gait(gsexp::Node form, Gait& g) {
@@ -305,7 +308,7 @@ void read_gait(gsexp::Node form, Gait& g) {
             g.spring_damp = num(c.child_at(2), g.spring_damp);
         } else if (h == "leg") {
             GaitLeg l;
-            for (int k = 0; k < 4; k++) {
+            for (int k = 0; k < 5; k++) {
                 gsexp::Node n = c.child_at(1 + k);
                 if (n.valid() && !n.is_list()) l.names[k] = std::string(n.text());
             }

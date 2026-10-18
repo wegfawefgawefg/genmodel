@@ -85,7 +85,8 @@ def place(piece, R, t, rename_part):
         return sdf.Xform(n, R, t)
 
     p = Piece(piece.name if not rename_part else f"{rename_part}.{piece.name}", wrap(piece.body), h=piece.h,
-              tris=piece.tris, part=rename_part, free=piece.free, tile=piece.tile, tile_uv=piece.tile_uv)
+              tris=piece.tris, part=rename_part, free=piece.free, tile=piece.tile, tile_uv=piece.tile_uv,
+              mesher=piece.mesher)
     p.details = [(op, wrap(node), mat) for op, node, mat in piece.details]
     if piece.element is not None:
         p.element = piece.element

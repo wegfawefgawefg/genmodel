@@ -122,7 +122,7 @@ void gait_prepare(Anim& a, const Rig& rig) {
     g.hips = g.hips_name.empty() ? -1 : find_part(rig, g.hips_name);
     g.head = g.head_name.empty() ? -1 : find_part(rig, g.head_name);
     for (GaitLeg& l : g.legs)
-        for (int k = 0; k < 4; k++) l.part[k] = l.names[k].empty() ? -1 : find_part(rig, l.names[k]);
+        for (int k = 0; k < 5; k++) l.part[k] = l.names[k].empty() ? -1 : find_part(rig, l.names[k]);
     for (GaitArm& m : g.arms)
         for (int k = 0; k < 2; k++) m.part[k] = find_part(rig, m.names[k]);
     for (const GaitLeg& l : g.legs) {
@@ -170,6 +170,7 @@ void gait_prepare(Anim& a, const Rig& rig) {
             }
             Vec3 ankle = rig.parts[leg.part[2]].pivot;
             Vec3 toe = leg.part[3] >= 0 ? rig.parts[leg.part[3]].pivot : Vec3{ankle.x, 0, ankle.z + leg.toe};
+            toe.y = 0; // roll about the sole under the ball, so nothing dips into the ground
             Vec3 heel = {ankle.x, 0, ankle.z - leg.heel};
             float* out = nullptr;
             s.foot.resize(s.foot.size() + foot_channels);
@@ -204,6 +205,8 @@ void gait_prepare(Anim& a, const Rig& rig) {
                     out[5] = -side * st.invert * moving * (1 - smooth(0.0f, 0.2f, u0));
                 }
                 float u = psi / std::max(st.duty, 1e-3f);
+                out[6] = st.give * moving * (0.55f * std::sin(pi * std::min(u * 1.4f, 1.0f)) + 0.8f * kick) +
+                         st.strike * moving * (1 - smooth(0, 0.15f, u)) * 1.3f;
                 if (u < 0.15f) {
                     // heel strike: the foot slaps down flat about its heel
                     foot_motion(heel, 0, fs.z, st.strike * moving * (1 - smooth(0, 0.15f, u)), out);
@@ -227,9 +230,16 @@ void gait_prepare(Anim& a, const Rig& rig) {
                 Vec3 p = sw < 0.5f ? toe + (ankle - toe) * (sw / 0.5f) : ankle + (heel - ankle) * ((sw - 0.5f) / 0.5f);
                 p.y = sw < 0.5f ? lerp(toe.y, ankle.y, sw / 0.5f) : lerp(ankle.y, 0.0f, (sw - 0.5f) / 0.5f);
                 foot_motion(p, lift, fs.z, pitch, out);
-                // toes snap down off the push, then reach up for the next footfall
-                out[4] = lerp(fs.rel_at_lift, -8.0f * moving, smooth(0.0f, 0.25f, sw)) * (1 - smooth(0.6f, 1.0f, sw)) +
-                         6.0f * moving * smooth(0.6f, 1.0f, sw);
+                // the toes' angle in the world: flat as they leave, pointing a little down only
+                // once the foot is up, then up for the next footfall; relative to the foot
+                float toes_world = moving * (-10.0f * smooth(0.2f, 0.45f, sw) * (1 - smooth(0.6f, 0.85f, sw)) +
+                                             6.0f * smooth(0.65f, 1.0f, sw));
+                out[4] = toes_world - pitch;
+                // the spur springs open off the ground, then reaches down for the landing
+                // the spur springs open off the ground, reaches a little for the landing, and folds
+                // up by the foot's toes-up pitch so its tip stays clear of the ground
+                out[6] = st.give * moving * (0.5f * (1 - smooth(0.0f, 0.3f, sw)) - 0.2f * smooth(0.55f, 0.9f, sw)) +
+                         std::max(pitch, 0.0f) * 1.3f;
                 // rolled in to meet the ground, flattening as it lands
                 float side = ankle.x >= 0 ? 1.0f : -1.0f;
                 out[5] = -side * st.invert * moving * smooth(0.45f, 0.85f, sw);
@@ -277,6 +287,12 @@ void gait_prepare(Anim& a, const Rig& rig) {
         GaitSample& s = g.table[i];
         for (float& x : s.body) x *= w;
         for (float& x : s.foot) x *= w;
+    }
+    // the speed as a driver for other tracks (flaps opening, antennas streaming...)
+    a.speed_table.assign(a.rate_table.size(), 0.0f);
+    for (size_t i = 0; i < a.speed_table.size(); i++) {
+        float tt = i * a.table_dt;
+        a.speed_table[i] = g.table[std::min((size_t)(tt / g.dt), g.table.size() - 1)].speed;
     }
     float total = g.table.back().ground;
     g.ground_period = total > 0.5f ? total / std::max(1.0f, std::round(total / 1.5f)) : 1.5f;
@@ -345,6 +361,11 @@ void gait_legs(const Anim& a, const Rig& rig, float t, Pose& pose) {
         if (leg.part[3] >= 0) {
             Vec3 ball = rig.parts[leg.part[3]].pivot;
             pose.bones[leg.part[3]] = foot * translate(ball) * rotate({-f[4] * deg, 0, 0}) * translate(ball * -1.0f);
+        }
+        if (leg.part[4] >= 0) {
+            // the heel spur folds its tip up about its hinge
+            Vec3 hinge = rig.parts[leg.part[4]].pivot;
+            pose.bones[leg.part[4]] = foot * translate(hinge) * rotate({f[6] * deg, 0, 0}) * translate(hinge * -1.0f);
         }
     }
 }

@@ -45,6 +45,7 @@ inline float drive(const Anim& a, const Drive& d, float t) {
     if (d.driver == Driver::heat) v = table_at(a.heat_table, a.table_dt, t);
     if (d.driver == Driver::idle) v = table_at(a.idle_table, a.table_dt, t);
     if (d.driver == Driver::curve && d.curve >= 0) v = table_at(a.curves[d.curve].table, a.table_dt, t);
+    if (d.driver == Driver::speed) v = table_at(a.speed_table, a.table_dt, t);
     if (d.driver == Driver::smoulder) {
         float idle = table_at(a.idle_table, a.table_dt, t);
         v = table_at(a.heat_table, a.table_dt, t) * idle * idle;

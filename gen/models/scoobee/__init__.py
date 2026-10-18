@@ -15,9 +15,10 @@ from scene import Material, Scene
 
 UNIT = 0.05
 STYLE = "lofi"
-TEXTURE = 1024  # a whole mech needs more texels than a gun
+TEXTURE = 2048  # a whole mech needs more texels than a gun
+GROUNDED = True  # the build stands it on y = 0
 
-TAN, OLIVE, ORANGE, DARK, CHROME, RUST, GLASS, RUBBER = range(8)
+TAN, OLIVE, ORANGE, DARK, CHROME, RUST, GLASS, RUBBER, LAMP = range(9)
 
 MATERIALS = [
     Material("tan", (196, 184, 150), 0.3, "paint", (150, 146, 132), rust=0.5),
@@ -28,6 +29,7 @@ MATERIALS = [
     Material("rust", (124, 76, 48), 0.25, "paint", (90, 80, 70), rust=0.8),
     Material("glass", (30, 38, 42), 0.95, "metal"),
     Material("rubber", (34, 33, 32), 0.1, "rubber"),
+    Material("lamp", (255, 36, 24), 0.9, "glow"),
 ]
 
 # every joint once: both sides of it are shaped from these
@@ -41,6 +43,9 @@ ELBOW = Joint("elbow", "hinge", 0.12, 0.1)
 WRIST = Joint("wrist", "hinge", 0.085, 0.07)
 GRIP = Joint("grip", "hinge", 0.05, 0.05)
 BALL = Joint("ball", "hinge", 0.07, 0.1)  # the foot's toe joint
+SPUR = Joint("spur", "hinge", 0.05, 0.05)  # the heel spur's hinge
+FLAP = Joint("flap", "hinge", 0.03, 0.12)  # cup flaps over the intakes
+PYLON = Joint("pylon", "hinge", 0.06, 0.1)  # the shoulder launcher's mount
 
 HERE = os.path.dirname(__file__)
 
@@ -51,6 +56,7 @@ def make_part(model, side):
     builders = {
         "torso": body.torso, "head": body.head, "pelvis": body.pelvis,
         "thigh": limbs.thigh, "shin": limbs.shin, "foot": limbs.foot, "toes": limbs.toes,
+        "flap": body.flap, "shin_flap": limbs.shin_flap, "launcher": body.launcher, "spur": limbs.spur,
         "upper_arm": limbs.upper_arm, "forearm": limbs.forearm, "claw": limbs.claw, "rifle": limbs.rifle,
     }
     part = builders[model]()

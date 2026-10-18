@@ -76,3 +76,35 @@ def grille(center, w, h, n, axis="z", mat=DARK):
         else:
             slats.append(Box(0.02, h / (2.6 * n), w / 2, mat, ch=0.005).at(cx, y, cz))
     return Union(*slats)
+
+
+def teardrop_profile(r, length, n=7):
+    """Lathe profile of a teardrop: a round nose (top, +y) tapering to a fine tail at -length."""
+    nose = [(r * np.sin(a), r * np.cos(a)) for a in np.radians(np.linspace(12, 90, n))]
+    tail = [(r * 0.86, -length * 0.3), (r * 0.6, -length * 0.62), (r * 0.3, -length * 0.88), (r * 0.08, -length)]
+    return [(max(x, 0.01), y) for x, y in nose] + tail
+
+
+def teardrop(r, length, mat):
+    """A teardrop with its round nose facing +z and its tail running back along -z."""
+    return sdf.Lathe(teardrop_profile(r, length), mat).rot("x", 90)
+
+
+def cup_flap(r, length, mat, thick=0.025):
+    """A half teardrop shell, the outer (+x) half of one, hinged at its nose (the origin) and
+    running back along -z; its open side faces the body. Opens by swinging its tail out."""
+    shell = sdf.Shell(teardrop(r, length, mat).at(0, 0, -r), thick)
+    return sdf.Intersect(shell, Box(r * 1.2, r * 1.2, length * 0.7, mat).at(r * 1.2, 0, -length * 0.55 - r * 0.2))
+
+
+def pipe(points, r, mat=DARK):
+    """A round pipe bent along a bezier (p0 h1 h2 p3)."""
+    c = sdf.Curve(points)
+    return sdf.Bend(Cylinder(r, c.length * 0.5, mat, axis="x").at(c.length * 0.5, 0, 0), c, across=(1, 0, 0))
+
+
+def antenna(base, tip, r=0.012, mat=CHROME):
+    """A long whip swept back from a base boss, with a ball at the tip."""
+    base, tip = np.asarray(base, np.float32), np.asarray(tip, np.float32)
+    return Union(Cylinder(r * 3.5, 0.03, DARK, axis="y", ch=0.01).at(*base), segment(base, tip, r, mat),
+                 segment(base, base + (tip - base) * 0.18, r * 1.8, DARK), sdf.Sphere(r * 2.2, DARK).at(*tip))

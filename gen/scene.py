@@ -33,6 +33,7 @@ class Piece:
     free: bool = False    # moves far from rest (casings, flashes): no culling, casts no AO
     tile: str = ""        # textured with a repeating tile (Scene.tiles) instead of the atlas
     tile_uv: object = None  # f(local verts (N, 3)) -> uv (N, 2) for the tile
+    mesher: str = ""      # "contour" keeps smooth blends even in a poly style (organic hull shapes)
 
     def cut(self, node, mat=None):
         self.details.append(("cut", node, mat))
