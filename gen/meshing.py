@@ -113,6 +113,19 @@ def surface_normals(dist, verts, faces, h, merge_deg=40.0):
     corner_n = np.where(smooth[:, :, None], g_vert, np.where(side_ok[:, :, None], g_side, fn[:, None, :]))
     corner_n = corner_n.reshape(-1, 3)
 
+    return weld_corners(verts, faces, corner_n, merge_deg)
+
+
+def crease_split(verts, faces, crease_deg=20.0):
+    """Flat-shaded look: each face keeps its own normal, but neighbours within crease_deg
+    share an averaged one, so flat panels stay one smooth piece and facets stay sharp."""
+    fn, _ = face_normals(verts, faces)
+    return weld_corners(verts, faces, np.repeat(fn, 3, axis=0), crease_deg)
+
+
+def weld_corners(verts, faces, corner_n, merge_deg):
+    """Per vertex, greedily cluster its face corners by normal and average each cluster;
+    returns (verts, normals, faces) with a vertex per cluster."""
     cos_t = math.cos(math.radians(merge_deg))
     corner_v = faces.reshape(-1)
     order = np.argsort(corner_v, kind="stable")

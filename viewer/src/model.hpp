@@ -24,6 +24,7 @@ struct Model {
     std::vector<std::string> groups; // obj "g" names, one per rig part
     std::vector<int> vertex_group;   // per vertex, index into groups
     Image texture;
+    bool nearest = false; // chunky texels: "# genmodel filter nearest" in the .mtl
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };

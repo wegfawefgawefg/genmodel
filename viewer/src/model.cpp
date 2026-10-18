@@ -45,10 +45,13 @@ Corner parse_corner(const char* s) {
     return c;
 }
 
-std::string texture_from_mtl(const fs::path& mtl_path) {
+std::string texture_from_mtl(const fs::path& mtl_path, bool* nearest = nullptr) {
     std::ifstream f(mtl_path);
     std::string line;
     while (std::getline(f, line)) {
+        if (nearest && line.rfind("# genmodel filter nearest", 0) == 0) {
+            *nearest = true;
+        }
         std::istringstream ss(line);
         std::string key;
         ss >> key;
@@ -61,12 +64,12 @@ std::string texture_from_mtl(const fs::path& mtl_path) {
     return "";
 }
 
-std::string texture_path_for(const std::string& obj_path) {
+std::string texture_path_for(const std::string& obj_path, bool* nearest = nullptr) {
     std::ifstream f(obj_path);
     std::string line;
     while (std::getline(f, line)) {
         if (line.rfind("mtllib ", 0) == 0) {
-            return texture_from_mtl(fs::path(obj_path).parent_path() / line.substr(7));
+            return texture_from_mtl(fs::path(obj_path).parent_path() / line.substr(7), nearest);
         }
     }
     return "";
@@ -167,7 +170,7 @@ bool load_model(const std::string& obj_path, Model& out) {
     }
 
     // texture, or a flat grey stand-in
-    std::string tex = texture_path_for(obj_path);
+    std::string tex = texture_path_for(obj_path, &m.nearest);
     if (tex.empty() || !load_png(tex, m.texture)) {
         m.texture.w = m.texture.h = 1;
         m.texture.rgba = {180, 180, 180, 64};

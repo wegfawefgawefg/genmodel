@@ -5,19 +5,20 @@
 set -e
 cd "$(dirname "$0")/.."
 name="${1:-liedersanger}"
+base="${name%%-*}"  # a styled build (liedersanger-crunch) plays its base model's anim and sounds
 secs="${2:-16}"
 orbit="${3:-16}"
 pitch="${4:-14}"
 tmp=$(mktemp -d)
 ninja -C build >/dev/null
-./build/viewer "out/$name/$name.obj" --anim "gen/models/$name.anim.sexp" --capture "$tmp/f_%04d.png" \
+./build/viewer "out/$name/$name.obj" --anim "gen/models/$base.anim.sexp" --capture "$tmp/f_%04d.png" \
     --turntable $((secs * 60)) --spin-secs "$orbit" --size 1280 720 --yaw -35 --pitch "$pitch" --zoom 0.85 |
     grep -v "^loaded\|^headless\|^rig\|^anim"
 # the soundtrack: clips prepared from the bank, mixed by the viewer on the shot times
 audio=()
-if [ -f "gen/models/$name.sound.sexp" ] && [ -d ref/sounds ]; then
-    .venv/bin/python tools/sounds.py "$name" >/dev/null
-    ./build/viewer "out/$name/$name.obj" --anim "gen/models/$name.anim.sexp" --audio "$tmp/sound.wav" \
+if [ -f "gen/models/$base.sound.sexp" ] && [ -d ref/sounds ]; then
+    .venv/bin/python tools/sounds.py "$base" >/dev/null
+    ./build/viewer "out/$name/$name.obj" --anim "gen/models/$base.anim.sexp" --audio "$tmp/sound.wav" \
         --audio-secs "$secs" | grep -v "^loaded\|^rig\|^anim\|^sound"
     audio=(-i "$tmp/sound.wav" -c:a aac -b:a 192k)
 fi

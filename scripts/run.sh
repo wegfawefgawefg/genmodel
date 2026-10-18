@@ -7,14 +7,15 @@
 set -e
 cd "$(dirname "$0")/.."
 name="${1:-liedersanger}"
+base="${name%%-*}"  # a styled build (liedersanger-crunch) plays its base model's anim and sounds
 [ -f "out/$name/$name.obj" ] || name=test
 cmake -S viewer -B build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
 ninja -C build >/dev/null
 anim=()
-[ -f "gen/models/$name.anim.sexp" ] && anim=(--anim "gen/models/$name.anim.sexp")
+[ -f "gen/models/$base.anim.sexp" ] && anim=(--anim "gen/models/$base.anim.sexp")
 # sound clips from the bank (rerun tools/sounds.py after editing samples; cues reload live)
-if [ -f "gen/models/$name.sound.sexp" ] && [ -d ref/sounds ]; then
-    .venv/bin/python tools/sounds.py "$name" >/dev/null
+if [ -f "gen/models/$base.sound.sexp" ] && [ -d ref/sounds ]; then
+    .venv/bin/python tools/sounds.py "$base" >/dev/null
 fi
 GENMODEL_ON_SCREEN=1 ./build/viewer "out/$name/$name.obj" "${anim[@]}" --yaw -30 --pitch 10 &
 pid=$!

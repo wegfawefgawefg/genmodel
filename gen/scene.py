@@ -112,6 +112,7 @@ class Scene:
     texture_size: int = 2048
     scale: float = 1.0    # applied at export
     rust: float = 0.0     # weathering for the whole model, 0..1
+    style: dict = field(default_factory=dict)  # settings from gen/styles/<name>.sexp
 
     def union_eval(self, p, nodes, pad=0.05):
         """Union of pieces, skipping pieces whose bounds are far from the points."""

@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import bake
 import export
 import meshing
+import sdf
+from sexp import field, parse_sexp
 
 F = np.float32
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,23 +73,57 @@ def mesh_pieces(scene, coarse):
     return v[used], remap[f], np.array(parts), np.array(owners)
 
 
+def load_style(name):
+    """gen/styles/<name>.sexp as a flat dict of settings."""
+    form = parse_sexp(open(os.path.join(ROOT, "gen", "styles", name + ".sexp")).read())[0]
+    st = {}
+    for key in ("facets", "texture"):
+        if field(form, key):
+            st[key] = int(field(form, key)[0])
+    for key in ("tris", "voxel", "grain", "grain-tint", "rust-specks", "chips", "grime", "cool-edges"):
+        if field(form, key):
+            st[key] = float(field(form, key)[0])
+    if field(form, "texture") and len(field(form, "texture")) > 1:
+        st["filter"] = field(form, "texture")[1]
+    norm = field(form, "normals")
+    if norm and norm[0] == "flat":
+        st["flat"] = float(norm[1]) if len(norm) > 1 else 20.0
+    st["palette"] = {p[0]: tuple(int(c) for c in p[1:4]) for p in (field(form, "palette") or [])}
+    return st
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
     ap.add_argument("--tex", type=int, default=None)
     ap.add_argument("--fast", action="store_true", help="coarser voxels and a small texture")
+    ap.add_argument("--style", default=None, help="a gen/styles/<name>.sexp to build in")
     args = ap.parse_args()
 
     t0 = time.time()
+    style = load_style(args.style) if args.style else {}
+    # facets must be set before the model builds its primitives
+    sdf.FACETS = style.get("facets", 0)
     mod = importlib.import_module("models." + args.model)
     scene = mod.build()
-    size = args.tex or (1024 if args.fast else scene.texture_size)
-    coarse = 1.6 if args.fast else 1.0
+    scene.style = style
+    size = args.tex or (1024 if args.fast else style.get("texture", scene.texture_size))
+    coarse = (1.6 if args.fast else 1.0) * style.get("voxel", 1.0)
+    for pc in scene.pieces:
+        # small repeated parts (coil rings, links) fall apart below a few dozen triangles
+        pc.tris = max(int(pc.tris * style.get("tris", 1.0)), min(pc.tris, 28))
+    for m in scene.materials:
+        if m.name in style.get("palette", {}):
+            m.color = style["palette"][m.name]
+    out_name = args.model + ("-" + args.style if args.style else "")
 
     print("meshing")
     v, f, face_part, face_piece = mesh_pieces(scene, coarse)
-    bodies = [(pc.body, *pc.body.bounds()) for pc in scene.pieces]
-    v, n, f = meshing.surface_normals(lambda q: scene.union_eval(q, bodies)[0], v, f, 0.03)
+    if "flat" in style:
+        v, n, f = meshing.crease_split(v, f, crease_deg=style["flat"])
+    else:
+        bodies = [(pc.body, *pc.body.bounds()) for pc in scene.pieces]
+        v, n, f = meshing.surface_normals(lambda q: scene.union_eval(q, bodies)[0], v, f, 0.03)
     print(f"  decimated: {len(f)} tris, {len(v)} verts  ({time.time() - t0:.1f}s)")
 
     print("texturing")
@@ -95,10 +131,10 @@ def main():
     v, n, f, uv = bake.make_atlas(v, n, f, size)
     assert len(f) == n_faces, "atlas changed the face list"
     tex = bake.bake(scene, v, n, f, uv, size, getattr(mod, "UNIT", 0.08), face_piece)
-    out_dir = os.path.join(ROOT, "out", args.model)
-    export.write_obj(out_dir, args.model, v * scene.scale, n, uv, f, tex, face_part)
-    export.write_rig(out_dir, args.model, scene)
-    print(f"wrote out/{args.model}/{args.model}.obj  {len(f)} tris, {size}px texture  ({time.time() - t0:.1f}s)")
+    out_dir = os.path.join(ROOT, "out", out_name)
+    export.write_obj(out_dir, out_name, v * scene.scale, n, uv, f, tex, face_part, style.get("filter", "linear"))
+    export.write_rig(out_dir, out_name, scene)
+    print(f"wrote out/{out_name}/{out_name}.obj  {len(f)} tris, {size}px texture  ({time.time() - t0:.1f}s)")
 
 
 if __name__ == "__main__":

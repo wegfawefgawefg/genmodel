@@ -8,7 +8,7 @@ import numpy as np
 import xatlas
 from scipy import ndimage
 
-from noise import fbm
+from noise import fbm, hash3
 
 F = np.float32
 
@@ -92,7 +92,33 @@ def to_lin(c):
     return (np.asarray(c, F) / 255.0) ** 2.2
 
 
-def shade(scene, p, n, unit, piece):
+def per_texel(texel, salt):
+    """A random number in [0, 1) for each texel, stable across bakes."""
+    ids = np.stack([texel, np.full(len(texel), salt), np.zeros(len(texel), np.int64)], 1).astype(np.int64)
+    return hash3(ids, 0)
+
+
+def style_pass(st, col, spec, n, texel, edge, crease, paint, glow):
+    """The crunch look on top of the shading: per-texel grain, rust specks, white chips on
+    edges and a cool sheen on upward bevels. Everything is per texel, so it reads as the
+    chunky pixels it is."""
+    r = [per_texel(texel, k) for k in range(6)]
+    grain = st.get("grain", 0)
+    col = col * (1 + grain * (r[0] * 2 - 1))[:, None]
+    tint = st.get("grain-tint", 0)
+    col = col * (1 + tint * np.stack([r[1] - 0.5, r[1] * 0.4 - 0.2, 0.5 - r[1]], 1))
+    cool = st.get("cool-edges", 0) * edge * smoothstep(0.2, 0.8, n[:, 1])
+    col = col * (1 - cool[:, None]) + to_lin((178, 192, 214)) * cool[:, None]
+    chips = (r[2] < st.get("chips", 0) * edge * 0.8) & ~glow
+    col = np.where(chips[:, None], to_lin((206, 206, 200)) * (0.85 + 0.3 * r[3][:, None]), col)
+    specks = (r[4] < st.get("rust-specks", 0) * (0.4 + 2.5 * edge + 2.0 * crease)) & ~glow
+    rust = to_lin((196, 98, 38)) * (0.6 + 0.6 * r[5][:, None])
+    col = np.where(specks[:, None], rust, col)
+    spec = np.where(chips, spec + 0.3, np.where(specks, spec * 0.3, spec))
+    return col, spec
+
+
+def shade(scene, p, n, unit, piece, texel):
     """Albedo (linear) and spec for texel points p with normals n, each on scene.pieces[piece].
     unit is a typical detail size in model units, used for wear widths and noise scale."""
     solid = scene.bake_nodes(include_free=False)
@@ -118,6 +144,9 @@ def shade(scene, p, n, unit, piece):
     ao_near = ambient_occlusion(dist, p + n * unit * 0.05, n, unit * 1.5)
     ao_far = ambient_occlusion(dist, p + n * unit * 0.05, n, unit * 7.0)
     ao = ao_near * (0.35 + 0.65 * ao_far)
+    st = scene.style
+    if st:
+        ao = 1 - (1 - ao) * st.get("grime", 1.0)
 
     # breakup noise at a few scales
     big = fbm(p / (unit * 25), 3, seed=1)
@@ -156,7 +185,7 @@ def shade(scene, p, n, unit, piece):
         streak = fbm(p * np.array([1, 0.08, 1], F) / (unit * 1.5), 3, seed=57)
         drip = smoothstep(0.1, -0.6, n[:, 1]) * 0.25 + (1 - ao_near) * 0.5
         want = patch + 0.55 * crease + drip + 0.45 * streak * smoothstep(0.3, 0.7, region) + 0.6 * chip
-        amount = smoothstep(0.95, 1.35, want + region * 0.5) * rust_mat * scene.rust
+        amount = smoothstep(0.95, 1.35, want + region * 0.5) * rust_mat * scene.rust * (0.12 if st else 1.0)
         rust_col = to_lin((66, 32, 16)) * (1 - fine[:, None]) + to_lin((150, 72, 30)) * fine[:, None]
         col = col * (1 - amount[:, None]) + rust_col * amount[:, None]
         spec = spec * (1 - 0.8 * amount)
@@ -166,6 +195,8 @@ def shade(scene, p, n, unit, piece):
     col = np.where(paint[:, None], col * (0.96 + 0.08 * streak[:, None]), col)
 
     col = col * ao[:, None]
+    if st:
+        col, spec = style_pass(st, col, spec, n, texel, edge, crease, paint, glow)
     col = np.where(glow[:, None], base * (1.2 + 0.3 * fine[:, None]), col)
 
     col, spec = apply_decals(scene, p, n, col, spec)
@@ -207,9 +238,9 @@ _JOB = None
 
 
 def _shade_chunk(span):
-    scene, p, n, unit, piece = _JOB
+    scene, p, n, unit, piece, texel = _JOB
     a, b = span
-    return shade(scene, p[a:b], n[a:b], unit, piece[a:b])
+    return shade(scene, p[a:b], n[a:b], unit, piece[a:b], texel[a:b])
 
 
 def bake(scene, verts, normals, faces, uvs, size, unit, face_piece):
@@ -226,7 +257,7 @@ def bake(scene, verts, normals, faces, uvs, size, unit, face_piece):
 
     # shade in parallel; workers inherit the scene through fork
     global _JOB
-    _JOB = (scene, p, nn, unit, face_piece[t])
+    _JOB = (scene, p, nn, unit, face_piece[t], ys.astype(np.int64) * size + xs)
     chunk = 20_000
     starts = list(range(0, len(p), chunk))
     with mp.get_context("fork").Pool(os.cpu_count()) as pool:

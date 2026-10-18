@@ -18,8 +18,11 @@ static std::string bank_path_for(const std::string& anim_path) {
     return anim_path.substr(0, anim_path.size() - tail.size()) + ".sound.sexp";
 }
 
-static std::string clip_dir_for(const std::string& obj_path) {
-    return (fs::path(obj_path).parent_path() / "sounds").string();
+// clips belong to the animation's model, so styled builds (out/m-crunch) share out/m/sounds
+static std::string clip_dir_for(const std::string& anim_path) {
+    std::string stem = fs::path(anim_path).filename().string();
+    stem = stem.substr(0, stem.find('.'));
+    return (fs::path(anim_path).parent_path().parent_path().parent_path() / "out" / stem / "sounds").string();
 }
 
 bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset& out) {
@@ -37,7 +40,7 @@ bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset
         if (a.animated) {
             fx_prepare(a.anim, a.rig);
             std::string bank = bank_path_for(anim_path);
-            if (!bank.empty() && fs::exists(bank) && load_sound_bank(bank, clip_dir_for(obj_path), a.sound)) {
+            if (!bank.empty() && fs::exists(bank) && load_sound_bank(bank, clip_dir_for(anim_path), a.sound)) {
                 sound_prepare(a.sound, a.anim);
             }
         }
@@ -68,7 +71,7 @@ int64_t asset_stamp(const Asset& a) {
         s = std::max(s, stamp_of(a.anim_path));
         s = std::max(s, stamp_of(bank_path_for(a.anim_path)));
         std::error_code ec;
-        for (const auto& e : fs::directory_iterator(clip_dir_for(a.obj_path), ec)) {
+        for (const auto& e : fs::directory_iterator(clip_dir_for(a.anim_path), ec)) {
             s = std::max(s, stamp_of(e.path().string()));
         }
     }

@@ -11,8 +11,25 @@ import numpy as np
 F = np.float32
 
 
+# when > 0, round primitives become prisms with this many sides (styles set it)
+FACETS = 0
+
+
 def length(v, axis=-1):
     return np.sqrt(np.sum(v * v, axis=axis))
+
+
+def radial(q, sides=None):
+    """Distance from the axis of a 2d point set (N, 2): a circle, or a regular polygon
+    (apothem measured) when FACETS is on."""
+    n = FACETS if sides is None else sides
+    r = length(q)
+    if n <= 0:
+        return r
+    sector = 2 * math.pi / n
+    a = np.arctan2(q[:, 1], q[:, 0])
+    local = np.mod(a + sector / 2, sector) - sector / 2
+    return r * np.cos(local)
 
 
 class Node:
@@ -111,11 +128,11 @@ class Cylinder(Leaf):
 
     def sd(self, p):
         along, rad = axis_frame(p, self.axis)
-        dx = length(rad) - self.r + self.re
+        dx = radial(rad) - self.r + self.re
         dy = np.abs(along) - self.h + self.re
         out = np.minimum(np.maximum(dx, dy), 0) + length(np.stack([np.maximum(dx, 0), np.maximum(dy, 0)], 1)) - self.re
         if self.ch > 0:
-            out = np.maximum(out, (length(rad) + np.abs(along) - (self.r + self.h - self.ch)) / math.sqrt(2.0))
+            out = np.maximum(out, (radial(rad) + np.abs(along) - (self.r + self.h - self.ch)) / math.sqrt(2.0))
         return out
 
     def bounds(self):
@@ -131,7 +148,7 @@ class Cone(Leaf):
 
     def sd(self, p):
         along, rad = axis_frame(p, self.axis)
-        q = np.stack([length(rad), along], 1)
+        q = np.stack([radial(rad), along], 1)
         h, r1, r2 = self.h, self.r0, self.r1
         k1 = np.array([r2, h], F)
         k2 = np.array([r2 - r1, 2 * h], F)
@@ -154,8 +171,8 @@ class Torus(Leaf):
 
     def sd(self, p):
         along, rad = axis_frame(p, self.axis)
-        q = np.stack([length(rad) - self.R, along], 1)
-        return length(q) - self.r
+        q = np.stack([radial(rad, FACETS * 2 if FACETS else 0) - self.R, along], 1)
+        return radial(q, 6 if FACETS else 0) - self.r
 
     def bounds(self):
         h = axis_half(self.axis, self.r, self.R + self.r)

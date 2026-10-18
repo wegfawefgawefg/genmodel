@@ -7,11 +7,12 @@ import numpy as np
 from PIL import Image
 
 
-def write_obj(out_dir, name, verts, normals, uvs, faces, texture, face_part):
+def write_obj(out_dir, name, verts, normals, uvs, faces, texture, face_part, texture_filter="linear"):
     os.makedirs(out_dir, exist_ok=True)
     Image.fromarray(texture, "RGBA").save(os.path.join(out_dir, name + ".png"))
     with open(os.path.join(out_dir, name + ".mtl"), "w") as f:
-        f.write(f"newmtl {name}\nKd 1 1 1\nKs 0 0 0\nmap_Kd {name}.png\n")
+        # the viewer reads the filter hint; other tools ignore the comment
+        f.write(f"# genmodel filter {texture_filter}\nnewmtl {name}\nKd 1 1 1\nKs 0 0 0\nmap_Kd {name}.png\n")
     lines = [f"mtllib {name}.mtl\n", f"o {name}\n"]
     lines += [f"v {x:.5f} {y:.5f} {z:.5f}\n" for x, y, z in verts]
     # obj puts v = 0 at the bottom of the image, the atlas at the top
