@@ -19,6 +19,7 @@ struct Args {
     std::string obj;
     std::string capture;
     bool sheet = false; // four standard views in a 2x2 grid
+    int turntable = 0;  // frames in one full turn, written to a %d pattern
     int width = 1280;
     int height = 720;
     Camera cam;
@@ -31,6 +32,8 @@ static bool parse_args(int argc, char** argv, Args& a) {
         bool has_next = i + 1 < argc;
         if (s == "--capture" && has_next) {
             a.capture = argv[++i];
+        } else if (s == "--turntable" && has_next) {
+            a.turntable = atoi(argv[++i]);
         } else if (s == "--sheet") {
             a.sheet = true;
         } else if (s == "--size" && i + 2 < argc) {
@@ -179,7 +182,7 @@ static int run_window(const Args& a, Model& model) {
 int main(int argc, char** argv) {
     Args a;
     if (!parse_args(argc, argv, a)) {
-        fprintf(stderr, "usage: viewer model.obj [--capture out.png [--sheet]] [--size w h]\n"
+        fprintf(stderr, "usage: viewer model.obj [--capture out.png [--sheet | --turntable N]] [--size w h]\n"
                         "       [--yaw deg] [--pitch deg] [--zoom z] [--wire] [--clay] [--uv]\n");
         return 1;
     }
@@ -191,6 +194,12 @@ int main(int argc, char** argv) {
         std::vector<Shot> shots;
         if (a.sheet) {
             shots = sheet_shots(a);
+        } else if (a.turntable > 0) {
+            for (int i = 0; i < a.turntable; i++) {
+                Shot s = {a.cam, a.opt};
+                s.cam.yaw += 2.0f * (float)M_PI * (float)i / (float)a.turntable;
+                shots.push_back(s);
+            }
         } else {
             shots.push_back({a.cam, a.opt});
         }

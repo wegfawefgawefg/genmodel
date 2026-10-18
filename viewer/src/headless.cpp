@@ -95,6 +95,25 @@ bool capture(const Model& model, const std::vector<Shot>& shots, int columns, in
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
+        // a printf pattern like frame_%03d.png writes one file per shot
+        if (out_path.find('%') != std::string::npos) {
+            Image frame;
+            frame.w = width;
+            frame.h = height;
+            frame.rgba.resize(pixels.size());
+            for (int y = 0; y < height; y++) {
+                memcpy(&frame.rgba[(size_t)y * width * 4], &pixels[(size_t)(height - 1 - y) * width * 4],
+                       (size_t)width * 4);
+            }
+            for (size_t k = 3; k < frame.rgba.size(); k += 4) {
+                frame.rgba[k] = 255;
+            }
+            char name[1024];
+            snprintf(name, sizeof(name), out_path.c_str(), (int)i);
+            save_png(name, frame);
+            continue;
+        }
+
         // flip rows into the tile
         int tx = (int)(i % columns) * width;
         int ty = (int)(i / columns) * height;
@@ -103,6 +122,11 @@ bool capture(const Model& model, const std::vector<Shot>& shots, int columns, in
             uint8_t* dst = &sheet.rgba[((size_t)(ty + y) * sheet.w + tx) * 4];
             memcpy(dst, src, (size_t)width * 4);
         }
+    }
+    if (out_path.find('%') != std::string::npos) {
+        printf("wrote %zu frames\n", shots.size());
+        eglTerminate(dpy);
+        return true;
     }
     for (size_t i = 3; i < sheet.rgba.size(); i += 4) {
         sheet.rgba[i] = 255;
