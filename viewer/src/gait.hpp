@@ -32,6 +32,7 @@ struct GaitStyle {
     float reach = 0.1f;   // the swing foot overshoots this far forward, then pulls back to land
     float invert = 3.0f;  // the swing foot rolls in this much before landing, degrees
     float give = 14.0f;   // the heel spur folds up under load like a sprung damper, degrees
+    float elbow_swing = 8.0f; // elbows flex with the arm swing, lagging it, degrees
 };
 
 struct GaitLeg {
@@ -45,6 +46,7 @@ struct GaitArm {
     std::string names[2]; // upper arm, forearm
     int part[2] = {-1, -1};
     float phase = 0;
+    float steady = 0; // 0 swings freely .. 1 holds its load level against the body's motion
 };
 
 const int body_channels = 8;
@@ -55,6 +57,7 @@ struct GaitSample {
     float arm_phase;       // cycle phase for the arms
     float speed;
     float ground;          // ground distance travelled
+    float impact;          // footfall shock (0 calm .. ~1 a hard landing), for the wave up the body
     std::vector<float> foot; // per leg: tx, ty, tz, pitch (deg) of the foot; toes' pitch; foot roll; spur (deg)
 };
 

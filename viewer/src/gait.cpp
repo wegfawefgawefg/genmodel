@@ -31,6 +31,14 @@ float impulse(float tau, float w) {
     return x * std::exp(1 - x);
 }
 
+// a hard landing: a sharp drop (about 20 ms) and a firm, heavy return over about 150 ms that
+// never overshoots (no wobble, no bounce back past rest)
+float thud(float tau) {
+    if (tau < 0 || tau > 0.9f) return 0;
+    const float attack = 0.018f, recover = 0.13f;
+    return (1 - std::exp(-tau / attack)) * std::exp(-tau / recover) * 1.45f;
+}
+
 GaitStyle mix(const GaitStyle& a, const GaitStyle& b, float t) {
     GaitStyle o;
     const float* pa = &a.speed;
@@ -89,6 +97,7 @@ GaitSample sample_at(const Gait& g, float t) {
     GaitSample o = a;
     for (int k = 0; k < body_channels; k++) o.body[k] = lerp(a.body[k], b.body[k], f);
     o.speed = lerp(a.speed, b.speed, f);
+    o.impact = lerp(a.impact, b.impact, f);
     o.ground = lerp(a.ground, b.ground, f);
     float dp = b.arm_phase - a.arm_phase; // phases wrap: interpolate the short way
     dp -= std::round(dp);
@@ -156,6 +165,7 @@ void gait_prepare(Anim& a, const Rig& rig) {
         s.ground = ground;
         s.arm_phase = phase;
         float sink = 0;           // footfalls pressing the body down
+        float shock = 0;          // footfalls' shock, for the wave up through the body
         float force_y = 0, force_z = 0; // ground reaction on the body from the stance feet
         for (size_t k = 0; k < g.legs.size(); k++) {
             const GaitLeg& leg = g.legs[k];
@@ -177,7 +187,9 @@ void gait_prepare(Anim& a, const Rig& rig) {
             out = &s.foot[s.foot.size() - foot_channels];
             float since = t - fs.touchdown;
             float kick = impulse(since, 9.0f) * fs.impact; // the damper's stroke after a footfall
-            sink += kick * st.impact;
+            float hit = thud(since) * fs.impact;          // the shock of the foot striking
+            sink += hit * st.impact;
+            shock += hit;
             if (!stance && fs.stance) {
                 fs.swing_from = fs.z;
                 fs.swing_to = stride * 0.5f;
@@ -264,6 +276,7 @@ void gait_prepare(Anim& a, const Rig& rig) {
         float twist = st.twist * moving * std::cos(2 * pi * (phase + g.legs[0].phase - swing_mid));
         s.body[0] = sway;
         s.body[1] = bob - st.crouch * moving - sink;
+        s.impact = shock;
         s.body[2] = body_z;
         // pitching into the shove: forward as the feet push, back as they brake
         s.body[3] = st.lean * moving + 1.2f * moving * std::cos(4 * pi * mid) + 40.0f * sink + 0.9f * force_z;
@@ -325,16 +338,32 @@ void gait_body(const Anim& a, float t, std::vector<Vec3>& move, std::vector<Vec3
     move[g.body] = move[g.body] + Vec3{s.body[0], s.body[1], s.body[2]};
     rot[g.body] = rot[g.body] + Vec3{s.body[3] * deg, s.body[5] * deg, s.body[4] * deg};
     if (g.hips >= 0) rot[g.hips] = rot[g.hips] + Vec3{0, s.body[6] * deg, s.body[7] * deg};
+    // a footfall's shock climbs the machine: hips first, the torso nods a beat later, the arms
+    // and their load bounce after that, the head last
+    float shock_torso = sample_at(g, std::max(t - 0.04f, 0.0f)).impact;
+    float shock_arms = sample_at(g, std::max(t - 0.07f, 0.0f)).impact;
+    float shock_head = sample_at(g, std::max(t - 0.1f, 0.0f)).impact;
+    rot[g.body] = rot[g.body] + Vec3{2.2f * shock_torso * deg, 0, 0};
     // the head holds its gaze steady against the body's pitch, roll and turn
-    if (g.head >= 0) rot[g.head] = rot[g.head] + Vec3{-0.7f * s.body[3] * deg, -0.8f * s.body[5] * deg, -0.7f * s.body[4] * deg};
+    if (g.head >= 0) rot[g.head] = rot[g.head] + Vec3{(-0.7f * s.body[3] + 3.0f * shock_head) * deg, -0.8f * s.body[5] * deg, -0.7f * s.body[4] * deg};
     GaitStyle st = style_at(g, s.speed);
     float moving = smooth(0.0f, 0.7f, s.speed);
     float swing_mid = st.duty + (1 - st.duty) * 0.5f;
     for (const GaitArm& m : g.arms) {
         if (m.part[0] < 0) continue;
         float c = std::cos(2 * pi * (s.arm_phase + m.phase - swing_mid));
-        rot[m.part[0]] = rot[m.part[0]] + Vec3{-st.arms * moving * c * deg, 0, 0};
-        if (m.part[1] >= 0) rot[m.part[1]] = rot[m.part[1]] + Vec3{st.elbows * moving * deg, 0, 0};
+        float k = 1 - m.steady;
+        float lag = std::cos(2 * pi * (s.arm_phase + m.phase - swing_mid - 0.12f));
+        // a steady arm holds its load level: the shoulder turns against the torso's pitch, nod
+        // and twist (which it would otherwise inherit), and the elbow takes the shock instead
+        float torso_pitch = s.body[3] + 2.2f * shock_torso;
+        Vec3 hold = Vec3{-torso_pitch * 0.92f, -s.body[5] * 0.85f, -s.body[4] * 0.6f} * (m.steady * deg);
+        rot[m.part[0]] = rot[m.part[0]] + Vec3{(-st.arms * moving * c * (0.1f + 0.9f * k) + 2.5f * shock_arms * k) * deg, 0, 0} + hold;
+        if (m.part[1] >= 0) {
+            float elbow = st.elbows * moving * k + st.elbow_swing * moving * lag * (0.15f + 0.85f * k);
+            float absorb = 4.0f * shock_arms * k - 1.5f * shock_arms * m.steady;
+            rot[m.part[1]] = rot[m.part[1]] + Vec3{(elbow + absorb) * deg, 0, 0};
+        }
     }
 }
 

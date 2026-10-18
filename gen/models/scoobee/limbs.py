@@ -181,30 +181,42 @@ RIFLE_X = 0.34  # the gun body rides this far outboard of the hand, joined by th
 
 
 def rifle():
-    """A big mech rifle, sized for a five-metre walker. The hand closes round a thick side
-    handle at the origin; the handle's bracket carries the gun outboard, beside the forearm.
-    One flowing body: a lofted receiver that runs back into a stock that thins at the wrist and
-    flares to the butt, the magazine and battery blended into its underside; forward, a
-    tapering vented shroud, a long barrel and a ported brake. Barrel along -y."""
+    """A big mech rifle that reads as a gun: drawn as side profiles (y along the barrel,
+    z up) extruded into crisp plates, the way guns are designed. The hand closes round a
+    thick side handle at the origin; its bracket carries the gun outboard, beside the
+    forearm. A long skeleton stock reaching back is the counterweight. Barrel along -y."""
     x = RIFLE_X
     handle = Union(knuckle(GRIP, DARK), segment((0, 0, -0.08), (0, 0, 0.1), 0.05, DARK),
-                   Box(x * 0.5, 0.07, 0.05, DARK, ch=0.02).at(x * 0.5, 0, 0.1))
-    # stations run butt (+y) to the front of the receiver (-y): half width, half depth, lift
-    body = Loft([(1.6, 0.1, 0.17, 0.02), (1.45, 0.1, 0.16, 0.04), (1.05, 0.075, 0.11, 0.1), (0.75, 0.1, 0.13, 0.11),
-                 (0.45, 0.15, 0.2, 0.12), (-0.2, 0.15, 0.2, 0.12), (-0.6, 0.13, 0.17, 0.13)], OLIVE).at(x, 0, 0)
-    under = Union(Box(0.085, 0.13, 0.17, DARK, ch=0.04).rot("x", 12).at(x, -0.38, -0.12),
-                  Box(0.11, 0.24, 0.1, DARK, ch=0.05).at(x, 0.52, -0.05))
-    body = sdf.Union(body, under, k=0.06)
-    body = sdf.Paint(body, Box(0.2, 0.06, 0.4, DARK).at(x, 1.6, 0.0), DARK)  # butt pad
-    shroud = Loft([(-0.55, 0.11, 0.13, 0.12), (-1.4, 0.1, 0.12, 0.12), (-2.0, 0.085, 0.1, 0.12)], OLIVE).at(x, 0, 0)
-    for k in range(6):
-        shroud = sdf.Cut(shroud, Box(0.15, 0.045, 0.04, OLIVE).at(x, -0.85 - 0.17 * k, 0.17), k=0.012)
-    barrel = Cylinder(0.07, 0.85, DARK, axis="y", ch=0.01).at(x, -2.8, 0.12)
-    brake = Cylinder(0.11, 0.14, DARK, axis="y", ch=0.03).at(x, -3.72, 0.12)
-    for k in range(3):
-        brake = sdf.Cut(brake, Box(0.16, 0.025, 0.05, DARK).at(x, -3.64 - 0.06 * k, 0.12))
-    pieces = [Piece("rifle", Union(body, shroud), h=0.018, tris=900, mesher="contour"),
-              Piece("barrel", Union(handle, barrel, brake), h=0.015, tris=400, mesher="contour")]
-    pieces[0].cut(Box(0.16, 0.006, 0.21, OLIVE).at(x, 0.2, 0.12))
-    pieces[0].cut(Box(0.16, 0.006, 0.21, OLIVE).at(x, -0.45, 0.12))
-    return MechPart("rifle", pieces, {})
+                   Box((x - 0.1) * 0.5, 0.07, 0.05, DARK, ch=0.02).at((x - 0.1) * 0.5, 0, 0.1))
+    # stepped receiver with a chamfered top and a magazine well underneath
+    receiver = Prism([(-0.78, 0.04), (-0.78, 0.22), (-0.62, 0.27), (0.36, 0.27), (0.52, 0.2), (0.52, 0.0),
+                      (0.12, -0.05), (-0.22, -0.05), (-0.36, 0.0), (-0.5, 0.0), (-0.6, 0.04)], 0.11, OLIVE, r=0.02, plane="yz")
+    rail = Prism([(-0.7, 0.27), (0.3, 0.27), (0.3, 0.31), (-0.7, 0.31)], 0.045, DARK, r=0.006, plane="yz")
+    mag = Prism([(-0.5, 0.01), (-0.3, 0.01), (-0.25, -0.36), (-0.44, -0.38)], 0.075, DARK, r=0.012, plane="yz")
+    bolt = Box(0.03, 0.05, 0.03, DARK, ch=0.01).at(0.12, 0.05, 0.2)  # charging handle, off the outboard side
+    # flat-sided shroud stepping down from the receiver, long barrel, finned brake
+    shroud = Prism([(-0.78, 0.06), (-0.78, 0.24), (-1.95, 0.21), (-2.0, 0.09)], 0.085, OLIVE, r=0.018, plane="yz")
+    barrel = Cylinder(0.062, 0.78, DARK, axis="y", ch=0.01).at(0, -2.75, 0.15)
+    brake = Union(Box(0.1, 0.17, 0.09, DARK, ch=0.03).at(0, -3.66, 0.15),
+                  *[Box(0.125, 0.018, 0.06, DARK, ch=0.006).at(0, -3.58 - 0.065 * k, 0.15) for k in range(3)])
+    # the long skeleton stock: top bar, diagonal strut, cheek riser, a tall butt plate,
+    # and a counterweight block where it meets the receiver
+    stock = Union(
+        Prism([(0.5, 0.12), (2.02, 0.1), (2.02, 0.2), (0.5, 0.23)], 0.05, OLIVE, r=0.012, plane="yz"),
+        Prism([(0.5, 0.02), (0.58, -0.04), (1.98, -0.16), (1.92, -0.08)], 0.04, DARK, r=0.01, plane="yz"),
+        Prism([(0.95, 0.21), (1.55, 0.2), (1.5, 0.3), (1.02, 0.31)], 0.055, OLIVE, r=0.012, plane="yz"),
+        Prism([(1.96, -0.24), (2.16, -0.26), (2.2, 0.26), (2.0, 0.26)], 0.07, DARK, r=0.015, plane="yz"),
+        Prism([(2.16, -0.24), (2.22, -0.24), (2.25, 0.24), (2.19, 0.24)], 0.075, RUBBER, r=0.01, plane="yz"),
+        Box(0.09, 0.16, 0.1, DARK, ch=0.03).at(0, 0.72, 0.02),
+    )
+    gun = Union(receiver, rail, mag, bolt, shroud, barrel, brake, stock).at(x, 0, 0)
+    pc = Piece("rifle", gun, h=0.015, tris=1100)
+    # panel lines, the ejection port, rail notches and shroud vents: in the texture
+    pc.cut(Box(0.2, 0.006, 0.3, OLIVE).at(x, -0.1, 0.1))
+    pc.cut(Box(0.2, 0.006, 0.3, OLIVE).at(x, 0.3, 0.1))
+    pc.cut(Box(0.2, 0.12, 0.05, OLIVE).at(x, 0.1, 0.18))
+    for k in range(8):
+        pc.cut(Box(0.06, 0.012, 0.03, DARK).at(x, -0.6 + 0.11 * k, 0.31))
+    for k in range(7):
+        pc.cut(Box(0.2, 0.045, 0.035, OLIVE).at(x, -0.95 - 0.14 * k, 0.15))
+    return MechPart("rifle", [pc, Piece("handle", handle, h=0.015, tris=200)], {})

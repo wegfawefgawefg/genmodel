@@ -291,6 +291,7 @@ void read_style(gsexp::Node form, GaitStyle& st) {
     st.reach = f.get_float("reach").value_or(st.reach);
     st.invert = f.get_float("invert").value_or(st.invert);
     st.give = f.get_float("give").value_or(st.give);
+    st.elbow_swing = f.get_float("elbow-swing").value_or(st.elbow_swing);
 }
 
 void read_gait(gsexp::Node form, Gait& g) {
@@ -321,6 +322,7 @@ void read_gait(gsexp::Node form, Gait& g) {
             GaitArm m;
             for (int k = 0; k < 2; k++) m.names[k] = std::string(c.child_at(1 + k).text());
             m.phase = f.get_float("phase").value_or(0);
+            m.steady = f.get_float("steady").value_or(0);
             g.arms.push_back(m);
         } else if (h == "speed") {
             for (gsexp::Node s : c.children()) {
