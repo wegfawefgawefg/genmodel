@@ -56,13 +56,13 @@
     (walk (speed 1.8) (cadence 0.56) (duty 0.62) (lift 0.3) (bob 0.02) (sway 0.08) (lean 2)
           (crouch 0) (arms 5) (elbows 0) (toe-off 22) (strike 10) (twist 9) (impact 0.07) (flex 10) (shove 1.0) (reach 0.05) (invert 2))
     (jog (speed 4.2) (cadence 0.86) (duty 0.4) (lift 0.55) (bob 0.0) (sway 0.04) (lean 5)
-         (crouch 0.2) (arms 14) (elbows -12) (toe-off 30) (strike 6) (twist 12) (impact 0.11) (flex 14) (shove 3.0) (reach 0.3) (invert 5))
+         (crouch 0.06) (arms 14) (elbows -12) (toe-off 30) (strike 6) (twist 12) (impact 0.11) (flex 14) (shove 3.0) (reach 0.3) (invert 5))
     (sprint (speed 8.0) (cadence 1.15) (duty 0.28) (lift 0.58) (bob 0.0) (sway 0.02) (lean 9)
-            (crouch 0.22) (arms 22) (elbows -18) (toe-off 38) (strike 2) (twist 15) (impact 0.14) (flex 18) (shove 6.0) (reach 0.6) (invert 9))
+            (crouch 0.08) (arms 22) (elbows -18) (toe-off 38) (strike 2) (twist 15) (impact 0.14) (flex 18) (shove 6.0) (reach 0.6) (invert 9))
     ; all out: huge strides, the swing leg thrown far forward and the stance leg driven far back,
     ; low and leaning hard into it, arms pumping
-    (allout (speed 15.0) (cadence 1.0) (duty 0.25) (lift 0.6) (bob 0.0) (sway 0.02) (lean 11)
-            (crouch 0.6) (arms 32) (elbows -26) (toe-off 55) (strike 0) (twist 26) (impact 0.18) (flex 24)
+    (allout (speed 15.0) (cadence 1.0) (duty 0.25) (lift 0.48) (bob 0.0) (sway 0.02) (lean 11)
+            (crouch 0.12) (arms 32) (elbows -26) (toe-off 55) (strike 0) (twist 26) (impact 0.18) (flex 24)
             (shove 13.0) (reach 1.4) (invert 11)))
 
   ; and glances about now and then
@@ -78,14 +78,14 @@
   (shake shin_flap_r shin_flap_l (by throttle 1) (freq 9) (rot 0 0 1 2))
 
   ; the engine breathes out of its stacks all the time, more when it works
-  (wisp torso (from 0.24 5.1 -1.365) (by one) (points 56) (life 2.6) (rise 0.35 0.05) (curl 0.03 0.25)
+  (wisp (from exhaust_r) (by one) (points 56) (life 2.6) (rise 0.35 0.05) (curl 0.03 0.25)
     (wind 0 0.05 -0.5) (size 0.08 0.8 1.0) (color 0.32 0.31 0.3 0.3))
-  (wisp torso (from -0.24 5.02 -1.35) (by one) (points 56) (life 2.4) (rise 0.32 0.05) (curl 0.03 0.22)
+  (wisp (from exhaust_l) (by one) (points 56) (life 2.4) (rise 0.32 0.05) (curl 0.03 0.22)
     (wind 0 0.05 -0.5) (size 0.08 0.75 1.0) (color 0.3 0.29 0.28 0.28))
 
   ; round tail lamps that leave a glow behind them as the body moves
-  (lamp torso (from 0.18 4.522 -1.64) (by one) (color 1.8 0.16 0.08) (size 0.13) (count 10) (life 0.14))
-  (lamp torso (from -0.18 4.522 -1.64) (by one) (color 1.8 0.16 0.08) (size 0.13) (count 10) (life 0.14))
+  (lamp (from lamp_r) (by one) (color 1.8 0.16 0.08) (size 0.13) (count 10) (life 0.14))
+  (lamp (from lamp_l) (by one) (color 1.8 0.16 0.08) (size 0.13) (count 10) (life 0.14))
 
   ; the rifle: at rest it comes up and in to a ready position; on the move it is carried tip
   ; down and out, stock back and up, easing between the two with the throttle

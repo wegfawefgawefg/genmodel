@@ -16,15 +16,15 @@
   (part launcher (on torso launcher))
 
   ; knees well bent, feet flat
-  (part thigh_r (model thigh) (on pelvis hip_r) (turn x -34 z 4))
-  (part shin_r (model shin) (on thigh_r knee) (turn x 58))
-  (part foot_r (model foot) (on shin_r ankle) (turn x -24))
+  (part thigh_r (model thigh) (on pelvis hip_r) (turn x -50 z 4))
+  (part shin_r (model shin) (on thigh_r knee) (turn x 88))
+  (part foot_r (model foot) (on shin_r ankle) (turn x -38))
   (part toes_r (model toes) (on foot_r ball))
   (part spur_r (model spur) (on foot_r spur))
   (part shin_flap_r (model shin_flap) (on shin_r flap))
-  (part thigh_l (model thigh) (on pelvis hip_l) (mirror) (turn x -34 z -4))
-  (part shin_l (model shin) (on thigh_l knee) (mirror) (turn x 58))
-  (part foot_l (model foot) (on shin_l ankle) (mirror) (turn x -24))
+  (part thigh_l (model thigh) (on pelvis hip_l) (mirror) (turn x -50 z -4))
+  (part shin_l (model shin) (on thigh_l knee) (mirror) (turn x 88))
+  (part foot_l (model foot) (on shin_l ankle) (mirror) (turn x -38))
   (part toes_l (model toes) (on foot_l ball) (mirror))
   (part spur_l (model spur) (on foot_l spur) (mirror))
   (part shin_flap_l (model shin_flap) (on shin_l flap) (mirror))
@@ -44,8 +44,8 @@
   (ram knee_ram_r (from thigh_r 0.33 -0.24 0.16) (to shin_r 0.35 -0.2 0.27) (r 0.05))
   (ram knee_ram_l (from thigh_l -0.33 -0.24 0.16) (to shin_l -0.35 -0.2 0.27) (r 0.05))
   ; calf rams pulling on heel levers behind the ankles
-  (ram ankle_ram_r (from shin_r 0 -0.6 -0.47) (to foot_r 0 -0.18 -0.33) (r 0.045))
-  (ram ankle_ram_l (from shin_l 0 -0.6 -0.47) (to foot_l 0 -0.18 -0.33) (r 0.045))
+  (ram ankle_ram_r (from shin_r 0 -0.6 -0.6) (to foot_r 0 -0.18 -0.33) (r 0.045))
+  (ram ankle_ram_l (from shin_l 0 -0.6 -0.6) (to foot_l 0 -0.18 -0.33) (r 0.045))
   ; biceps from the upper arm front to a pin on the forearm by the elbow
   (ram elbow_ram_r (from upper_arm_r 0 -0.22 0.19) (to forearm_r 0 -0.22 0.2) (r 0.035))
   (ram elbow_ram_l (from upper_arm_l 0 -0.22 0.19) (to forearm_l 0 -0.22 0.2) (r 0.035)))

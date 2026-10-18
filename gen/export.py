@@ -74,6 +74,8 @@ def write_rig(out_dir, name, scene):
         anchor = f" (anchor {ph.anchor})" if ph.anchor else ""
         lines.append(f"    (pitch {ph.pitch * k:.4f}) (start {ph.start * k:.4f}) (across {fmt(ph.across)}){anchor}\n")
         lines.append(f"    (links {links}))\n")
+    for mk, part, p in getattr(scene, "markers", []):
+        lines.append(f"  (marker {mk} {part} {fmt(np.asarray(p) * k)})\n")
     for cyl, rod in getattr(scene, "aims", []):
         lines.append(f"  (aim {cyl} {rod})\n")
     lines.append(")\n")

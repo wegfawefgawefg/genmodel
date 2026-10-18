@@ -44,6 +44,7 @@ class MechPart:
     name: str
     pieces: list
     sockets: dict = field(default_factory=dict)
+    markers: dict = field(default_factory=dict)  # named points (exhaust tips, lamps) in the part's frame
 
 
 def socket(name, joint, x, y, z, rot=None):
@@ -129,7 +130,8 @@ def assemble(assembly_path, make_part, only=None, ram_mats=(0, 0)):
     form = parse_sexp(open(assembly_path).read())[0]
     entries = [f for f in form if isinstance(f, list) and f and f[0] == "part"]
     placed = {}
-    pieces, parts = [], []
+    pieces, parts, markers = [], [], []
+    assemble.markers = markers
     for e in entries:
         name = e[1]
         opts = {f[0]: f[1:] for f in e[2:] if isinstance(f, list)}
@@ -159,6 +161,8 @@ def assemble(assembly_path, make_part, only=None, ram_mats=(0, 0)):
         placed[name] = (R, t, mp)
         pieces += [place(pc, R, t, name) for pc in mp.pieces]
         parts.append(Part(name, parent, tuple(float(v) for v in t)))
+        for mk, p in mp.markers.items():
+            markers.append((mk, name, tuple(float(v) for v in R @ np.asarray(p, F) + t)))
     # rams last: their ends ride parts placed above
     aims = []
     for e in (f for f in form if isinstance(f, list) and f and f[0] == "ram"):

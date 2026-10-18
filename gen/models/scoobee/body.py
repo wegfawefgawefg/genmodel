@@ -1,6 +1,8 @@
 """Scoobee core parts: torso (the root: a machinery spine under a long cabin capsule),
 head (a binocular sensor pod forward on a neck), pelvis (hip gear)."""
 
+import numpy as np
+
 import sdf
 from mech import MechPart, housing, knuckle, socket
 from models.scoobee import CHROME, DARK, FLAP, GLASS, HIP, LAMP, NECK, PYLON, OLIVE, ORANGE, RUBBER, RUST, SHOULDER, TAN, WAIST
@@ -165,7 +167,11 @@ def torso():
         # the missile pod rides out off the left side on an outrigger (an asymmetric load-out)
         "launcher": socket("launcher", PYLON, -0.62, 0.55, -0.35),
     }
-    return MechPart("torso", pieces, sockets)
+    up = sdf.rotation("x", -20) @ np.array([0, 0.07, 0], np.float32)
+    markers = {"exhaust_r": np.array([0.24, 0.98, -1.42], np.float32) + up,
+               "exhaust_l": np.array([-0.24, 0.9, -1.4], np.float32) + up,
+               "lamp_r": (0.18, 0.44, -1.67), "lamp_l": (-0.18, 0.44, -1.67)}
+    return MechPart("torso", pieces, sockets, markers)
 
 
 def head():

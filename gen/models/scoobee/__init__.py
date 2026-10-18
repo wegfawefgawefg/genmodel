@@ -65,5 +65,7 @@ def make_part(model, side):
 
 def build(part=None):
     pieces, parts, aims = assemble(os.path.join(HERE, "assembly.sexp"), make_part, only=part, ram_mats=(DARK, CHROME))
-    return Scene("scoobee" + ("_" + part if part else ""), MATERIALS, pieces, [], texture_size=TEXTURE, scale=1.0,
-                 parts=parts, rust=0.6, aims=aims)
+    scene = Scene("scoobee" + ("_" + part if part else ""), MATERIALS, pieces, [], texture_size=TEXTURE, scale=1.0,
+                  parts=parts, rust=0.6, aims=aims)
+    scene.markers = list(assemble.markers)
+    return scene

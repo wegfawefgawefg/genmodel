@@ -8,6 +8,10 @@
 
 namespace {
 
+bool looks_number(const std::string& s) {
+    return !s.empty() && (isdigit((unsigned char)s[0]) || s[0] == '-' || s[0] == '.' || s[0] == '+');
+}
+
 Ease ease_named(const std::string& s) {
     if (s == "smooth") return Ease::smooth;
     if (s == "expo-in") return Ease::expo_in;
@@ -170,7 +174,18 @@ bool read_track(gsexp::Node form, const Rig& rig, const Anim& a, int every, int 
         } else if (h == "life") {
             t.life = num(c.child_at(1), 1);
         } else if (h == "from") {
-            t.from = vec_at(c, 1);
+            // (from x y z), or (from marker): a named point the model exports, on its part
+            gsexp::Node n = c.child_at(1);
+            if (n.valid() && !n.is_list() && !looks_number(std::string(n.text()))) {
+                for (const RigMarker& m : rig.markers) {
+                    if (m.name == std::string(n.text())) {
+                        t.from = m.pos;
+                        if (t.parts.empty() && m.part >= 0) t.parts.push_back(m.part);
+                    }
+                }
+            } else {
+                t.from = vec_at(c, 1);
+            }
         } else if (h == "color") {
             t.color = vec_at(c, 1);
             t.alpha = num(c.child_at(4), t.alpha);

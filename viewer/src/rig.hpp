@@ -32,7 +32,14 @@ struct RigAim {
     int cylinder = -1, rod = -1;
 };
 
+struct RigMarker {
+    std::string name;
+    int part = -1;
+    Vec3 pos; // rest model space
+};
+
 struct Rig {
+    std::vector<RigMarker> markers;
     std::vector<RigPart> parts;
     std::vector<RigPath> paths;
     std::vector<RigAim> aims;

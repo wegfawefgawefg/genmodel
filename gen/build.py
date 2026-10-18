@@ -157,6 +157,7 @@ def main():
             pt.pivot = (pt.pivot[0], pt.pivot[1] + dy, pt.pivot[2])
         for ph in scene.paths:
             ph.points = [(p[0], p[1] + dy, p[2]) for p in ph.points]
+        scene.markers = [(n, p, (x, y + dy, z)) for n, p, (x, y, z) in getattr(scene, "markers", [])]
         scene.ground_dy = dy
         print(f"  grounded: moved {dy * 100:+.1f} cm")
     if "flat" in style:
@@ -170,7 +171,9 @@ def main():
     n_faces = len(f)
     v, n, f, uv = bake.make_atlas(v, n, f, size)
     assert len(f) == n_faces, "atlas changed the face list"
-    tex = bake.bake(scene, v, n, f, uv, size, getattr(mod, "UNIT", 0.08), face_piece)
+    # bake against the shapes where they were built (before standing the model on the ground)
+    v_built = v - np.array([0, getattr(scene, "ground_dy", 0.0), 0], F)
+    tex = bake.bake(scene, v_built, n, f, uv, size, getattr(mod, "UNIT", 0.08), face_piece)
     out_dir = os.path.join(ROOT, "out", out_name)
     export.write_obj(out_dir, out_name, v * scene.scale, n, uv, f, tex, face_part, style.get("filter", "linear"),
                      face_tile, face_tile_uv, scene.tiles)

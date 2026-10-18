@@ -48,8 +48,8 @@ def shin():
         segment((0.1, -0.16, 0.08), (0.27, -0.2, 0.27), 0.05, DARK),
         Box(0.03, 0.06, 0.06, DARK, ch=0.02).at(0.29, -0.2, 0.27),
         # a triangular gusset off the upper back of the shin out to the calf ram's pin
-        Prism([(-0.36, -0.12), (-0.98, -0.2), (-0.6, -0.5)], 0.035, DARK, r=0.01, plane="yz"),
-        Cylinder(0.045, 0.06, DARK, axis="x", ch=0.01).at(0, -0.6, -0.47),
+        Prism([(-0.36, -0.12), (-0.98, -0.2), (-0.6, -0.62)], 0.035, DARK, r=0.01, plane="yz"),
+        Cylinder(0.045, 0.06, DARK, axis="x", ch=0.01).at(0, -0.6, -0.59),
         # hinge brackets either end of the calf flap's pin, grown off the shell
         Box(0.045, 0.035, 0.022, DARK, ch=0.01).at(0.24, -0.62, -0.03),
         Box(0.045, 0.035, 0.022, DARK, ch=0.01).at(0.24, -0.62, 0.19),
