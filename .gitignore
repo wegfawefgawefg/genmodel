@@ -7,3 +7,4 @@ ref/*.png
 ref/*.jpg
 .vscode/
 out/test/
+ref/sounds/

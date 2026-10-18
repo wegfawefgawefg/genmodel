@@ -20,6 +20,7 @@ struct Args {
     std::string anim;
     std::string capture;
     bool sheet = false;     // four standard views in a 2x2 grid
+    bool print_shots = false; // print the animation's shot times and fire rate, then exit
     int turntable = 0;      // frames to write to a %d pattern, orbiting and animating
     float spin_secs = 0;    // seconds per orbit in a turntable (0: one orbit over all frames)
     float time = 0;         // animation time of a still, or of a turntable's first frame
@@ -43,6 +44,8 @@ static bool parse_args(int argc, char** argv, Args& a) {
             a.spin_secs = (float)atof(argv[++i]);
         } else if (s == "--time" && has_next) {
             a.time = (float)atof(argv[++i]);
+        } else if (s == "--print-shots") {
+            a.print_shots = true;
         } else if (s == "--sheet") {
             a.sheet = true;
         } else if (s == "--size" && i + 2 < argc) {
@@ -98,6 +101,7 @@ static std::vector<Shot> turntable_shots(const Args& a) {
 }
 
 static int run_window(const Args& a, Asset& asset) {
+    SDL_SetHint(SDL_HINT_APP_ID, "genmodel-viewer");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
@@ -108,8 +112,14 @@ static int run_window(const Args& a, Asset& asset) {
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 8);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_Window* window = SDL_CreateWindow("genmodel", a.width, a.height,
+    SDL_Window* window = SDL_CreateWindow("genmodel viewer", a.width, a.height,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    if (!window) {
+        // no multisampled visual on this display: go without
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+        window = SDL_CreateWindow("genmodel viewer", a.width, a.height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    }
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         return 1;
@@ -232,6 +242,16 @@ int main(int argc, char** argv) {
     Asset asset;
     if (!load_asset(a.obj, a.anim, asset)) {
         return 1;
+    }
+    if (a.print_shots) {
+        printf("length %.4f\n", asset.anim.length);
+        for (size_t i = 0; i < asset.anim.shots.size(); i++) {
+            printf("shot %.5f %zu\n", asset.anim.shots[i], i);
+        }
+        for (size_t i = 0; i < asset.anim.rate_table.size(); i += 4) {
+            printf("rate %.4f %.3f %.3f\n", i * asset.anim.table_dt, asset.anim.rate_table[i], asset.anim.heat_table[i]);
+        }
+        return 0;
     }
     if (!a.capture.empty()) {
         std::vector<Shot> shots;

@@ -16,6 +16,7 @@ class Material:
     spec: float = 0.3     # 0 matte .. 1 polished, goes to the texture's alpha
     kind: str = "paint"   # paint, metal, rubber, glow
     wear: tuple = (150, 150, 150)  # colour that shows through on worn edges
+    rust: float = 0.0     # how readily it rusts, 0..1
 
 
 @dataclass
@@ -110,6 +111,7 @@ class Scene:
     paths: list = field(default_factory=list)
     texture_size: int = 2048
     scale: float = 1.0    # applied at export
+    rust: float = 0.0     # weathering for the whole model, 0..1
 
     def union_eval(self, p, nodes, pad=0.05):
         """Union of pieces, skipping pieces whose bounds are far from the points."""

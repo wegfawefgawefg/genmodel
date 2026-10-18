@@ -36,6 +36,7 @@ Driver driver_named(const std::string& s) {
     if (s == "rate") return Driver::rate;
     if (s == "heat") return Driver::heat;
     if (s == "idle") return Driver::idle;
+    if (s == "smoulder") return Driver::smoulder;
     return Driver::one;
 }
 
@@ -86,6 +87,9 @@ TrackKind kind_named(const std::string& s, bool& ok) {
     if (s == "wave") return TrackKind::wave;
     if (s == "glow") return TrackKind::glow;
     if (s == "lean") return TrackKind::lean;
+    if (s == "wisp") return TrackKind::wisp;
+    if (s == "puff") return TrackKind::puff;
+    if (s == "spark") return TrackKind::spark;
     ok = false;
     return TrackKind::kick;
 }
@@ -150,6 +154,37 @@ bool read_track(gsexp::Node form, const Rig& rig, int every, int offset, Track& 
             t.spin = num(c.child_at(1));
         } else if (h == "life") {
             t.life = num(c.child_at(1), 1);
+        } else if (h == "from") {
+            t.from = vec_at(c, 1);
+        } else if (h == "color") {
+            t.color = vec_at(c, 1);
+            t.alpha = num(c.child_at(4), t.alpha);
+        } else if (h == "rise") {
+            t.rise = num(c.child_at(1));
+            t.accel = num(c.child_at(2), 0);
+        } else if (h == "curl") {
+            t.curl = num(c.child_at(1));
+            t.curl_hz = num(c.child_at(2), t.curl_hz);
+        } else if (h == "wind") {
+            t.wind = vec_at(c, 1);
+        } else if (h == "size") {
+            t.size0 = num(c.child_at(1));
+            t.size1 = num(c.child_at(2), t.size0);
+            t.grow = num(c.child_at(3), t.grow);
+        } else if (h == "count") {
+            t.count = (int)num(c.child_at(1), 6);
+        } else if (h == "points") {
+            t.points = (int)num(c.child_at(1), 48);
+        } else if (h == "launch") {
+            t.fwd = num(c.child_at(1));
+            t.spread = num(c.child_at(2));
+            t.up = num(c.child_at(3));
+        } else if (h == "dir") {
+            t.dir = norm(vec_at(c, 1));
+        } else if (h == "drag") {
+            t.drag = num(c.child_at(1), 3);
+        } else if (h == "warm") {
+            t.warm = num(c.child_at(1));
         } else if (h == "freq") {
             t.freq = num(c.child_at(1), 1);
         } else if (h == "by") {

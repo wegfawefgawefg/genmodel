@@ -21,6 +21,9 @@ bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset
     }
     if (!anim_path.empty()) {
         a.animated = load_anim(anim_path, a.rig, a.anim);
+        if (a.animated) {
+            fx_prepare(a.anim, a.rig);
+        }
     }
     out = std::move(a);
     return true;
@@ -29,6 +32,7 @@ bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset
 void asset_pose(const Asset& a, float t, Pose& out) {
     if (a.animated) {
         evaluate(a.anim, a.rig, t, out);
+        fx_evaluate(a.anim, t, out);
     } else {
         rest_pose(a.rig, out);
     }

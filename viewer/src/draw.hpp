@@ -25,6 +25,7 @@ struct Gpu {
     uint32_t empty_vao = 0;
     int index_count = 0;
     int additive_first = 0; // triangles of additive parts sit at the end of the index buffer
+    uint32_t fx_program = 0, fx_vao = 0, fx_vbo = 0, fx_atlas = 0;
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };
@@ -38,6 +39,9 @@ struct DrawOptions {
 const int max_parts = 128;
 
 bool gpu_init(Gpu& gpu);
+bool fx_init(Gpu& gpu);
+// smoke and sparks over the drawn model (view/proj column-major, eye in model space)
+void fx_draw(const Gpu& gpu, const Pose& pose, const float* view, const float* proj, Vec3 eye);
 // binds each vertex to its rig part by obj group name
 void gpu_upload(Gpu& gpu, Model& model, const Rig& rig);
 void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const Pose& pose, int width, int height);

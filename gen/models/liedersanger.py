@@ -19,13 +19,13 @@ UNIT = 0.08
 TEAL, WHITE, RED, GUNMETAL, BRASS, BLACK, STEEL, LENS, RUBBER, FLASH, FLASH_TIP = range(11)
 
 MATERIALS = [
-    Material("teal", (100, 200, 188), 0.35, "paint", (196, 206, 196)),
-    Material("white", (226, 229, 226), 0.35, "paint", (140, 142, 140)),
-    Material("red", (204, 42, 36), 0.35, "paint", (190, 180, 170)),
-    Material("gunmetal", (52, 46, 38), 0.65, "metal"),
+    Material("teal", (100, 200, 188), 0.35, "paint", (196, 206, 196), rust=0.55),
+    Material("white", (226, 229, 226), 0.35, "paint", (140, 142, 140), rust=0.6),
+    Material("red", (204, 42, 36), 0.35, "paint", (190, 180, 170), rust=0.4),
+    Material("gunmetal", (52, 46, 38), 0.65, "metal", rust=0.8),
     Material("brass", (156, 124, 62), 0.75, "metal"),
-    Material("black", (30, 30, 33), 0.3, "paint", (96, 96, 96)),
-    Material("steel", (104, 98, 88), 0.7, "metal"),
+    Material("black", (30, 30, 33), 0.3, "paint", (96, 96, 96), rust=0.5),
+    Material("steel", (104, 98, 88), 0.7, "metal", rust=0.7),
     Material("lens", (255, 40, 30), 0.9, "glow"),
     Material("rubber", (22, 22, 24), 0.1, "rubber"),
     Material("flash", (255, 214, 140), 0.0, "glow"),
@@ -42,6 +42,7 @@ DRUM_R = 1.95
 GEAR = (2.75, 0.45, 0.68)
 PORT = (5.35, 1.15, 0.95)  # where spent cases leave the receiver
 N_CASES = 16
+PORT_FROM_MUZZLE = 0.78  # muzzle brake side ports, behind the muzzle
 
 
 def drum_point(x, y, z):
@@ -91,21 +92,37 @@ def barrel(name, y, z, muzzle_x, spring_x0):
 
 
 def muzzle_flash(name, muzzle_x, y, z):
-    """A star of flame cones off the muzzle, hidden at rest and blown up on each shot."""
+    """Hidden at rest, blown up on each shot. The brake's ports throw most of the gas out
+    both sides, fanned flat by the slot and swept a little back; a smaller tongue leaves
+    the bore. It scales about the ports (PORT_FROM_MUZZLE)."""
     tip = muzzle_x - 0.05
-    core = sdf.Cone(0.0, 0.48, 0.55, FLASH).at(tip - 0.55, 0, 0)
-    burst = sdf.Cone(0.2, 0.8, 0.12, FLASH).at(tip - 0.2, 0, 0)
+    port = muzzle_x + PORT_FROM_MUZZLE
+    jets = []
+    for side in (1, -1):
+        for lift in (-0.3, 0.0, 0.3):
+            # cones point at their -x end; aim it out of the port
+            out = np.array([0.35, lift, side * 1.0], np.float32)
+            out /= np.linalg.norm(out)
+            base = np.array([port, 0, side * 0.36], np.float32)
+            jets.append(sdf.Xform(sdf.Cone(0.0, 0.2, 0.55, FLASH), sdf.frame_from_x(-out), base + out * 0.55))
+    # out of the bore: a big spiky star (long and short petals round a fat burst disc)
+    # with a narrow spike piercing forward through it
+    spike = sdf.Cone(0.0, 0.26, 1.6, FLASH).at(tip - 1.6, 0, 0)
+    tongue = sdf.Cone(0.1, 0.45, 0.45, FLASH).at(tip - 0.45, 0, 0)
+    burst = sdf.Cone(0.25, 0.85, 0.12, FLASH).at(tip - 0.2, 0, 0)
+    puff = sdf.Sphere(0.34, FLASH).at(tip - 0.15, 0, 0)
     petals = []
-    for a in np.radians([45, 135, 225, 315]):
-        # cones point at their -x end; aim that end outward and a little forward
-        out = np.array([-0.55, 0.83 * math.cos(a), 0.83 * math.sin(a)], np.float32)
-        centre = np.array([tip - 0.15, 0, 0], np.float32) + out * 0.5
-        petals.append(sdf.Xform(sdf.Cone(0.0, 0.13, 0.5, FLASH), sdf.frame_from_x(-out), centre))
-    puff = sdf.Sphere(0.36, FLASH).at(tip - 0.2, 0, 0)
-    body = Union(core, burst, puff, *petals, k=0.15)
-    # white hot at the muzzle, orange further out
-    body = sdf.Paint(body, Cut(sdf.Sphere(4.0, 0), sdf.Sphere(0.5, 0).at(tip - 0.15, 0, 0)), FLASH_TIP)
-    return Piece(name, body.at(0, y, z), h=0.02, tris=260, part=name, free=True)
+    for k, a in enumerate(np.radians(np.arange(8) * 45 + 22.5)):
+        reach = 0.75 if k % 2 == 0 else 0.45
+        # cones point at their -x end; aim it outward and forward
+        out = np.array([-0.6, 0.8 * math.cos(a), 0.8 * math.sin(a)], np.float32)
+        centre = np.array([tip - 0.15, 0, 0], np.float32) + out * reach
+        petals.append(sdf.Xform(sdf.Cone(0.0, 0.15, reach, FLASH), sdf.frame_from_x(-out), centre))
+    body = Union(spike, tongue, burst, puff, *petals, *jets, k=0.1)
+    # white hot at the brake, orange further out
+    hot = Union(sdf.Sphere(0.45, 0).at(port, 0, 0.4), sdf.Sphere(0.45, 0).at(port, 0, -0.4), sdf.Sphere(0.5, 0).at(tip - 0.15, 0, 0), sdf.Cone(0.0, 0.17, 1.2, 0).at(tip - 1.3, 0, 0))
+    body = sdf.Paint(body, Cut(sdf.Sphere(4.0, 0).at(port, 0, 0), hot), FLASH_TIP)
+    return Piece(name, body.at(0, y, z), h=0.02, tris=520, part=name, free=True)
 
 
 def upper_housing():
@@ -370,8 +387,8 @@ def rig(pieces):
         Part("root", "", (3.5, 0.6, 0.0)),
         Part("upper_barrel", "root", up_rear),
         Part("lower_barrel", "root", low_rear),
-        Part("upper_barrel_flash", "upper_barrel", (-7.95, UPPER_Y, UPPER_Z), additive=True),
-        Part("lower_barrel_flash", "lower_barrel", (-8.95, LOWER_Y, LOWER_Z), additive=True),
+        Part("upper_barrel_flash", "upper_barrel", (-7.9 + PORT_FROM_MUZZLE, UPPER_Y, UPPER_Z), additive=True),
+        Part("lower_barrel_flash", "lower_barrel", (-8.9 + PORT_FROM_MUZZLE, LOWER_Y, LOWER_Z), additive=True),
         Part("gear", "root", GEAR),
         Part("cover", "root", (2.85, 2.35, 0.05)),
         Part("lens", "root", (-1.33, 2.62, UPPER_Z)),
@@ -403,4 +420,4 @@ def build():
         rear_frame(),
     ]
     parts, paths = rig(pieces)
-    return Scene("liedersanger", MATERIALS, pieces, decals(), texture_size=2048, scale=0.25, parts=parts, paths=paths)
+    return Scene("liedersanger", MATERIALS, pieces, decals(), texture_size=2048, scale=0.25, parts=parts, paths=paths, rust=0.7)

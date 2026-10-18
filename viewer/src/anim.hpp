@@ -21,7 +21,8 @@ struct EaseSpec {
     float w = 0.0f;
 };
 
-enum class Driver { one, rate, heat, idle };
+// smoulder = heat * idle: hot but no longer firing
+enum class Driver { one, rate, heat, idle, smoulder };
 
 struct Drive {
     Driver driver = Driver::one;
@@ -40,7 +41,7 @@ struct Motion {
     Vec3 glow;
 };
 
-enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean };
+enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean, wisp, puff, spark };
 
 struct Track {
     TrackKind kind = TrackKind::kick;
@@ -67,6 +68,21 @@ struct Track {
     // continuous
     Drive by;
     float freq = 1;
+    // effects (wisp, puff, spark): emitted from `from` (model space at rest) carried by parts[0]
+    Vec3 from;
+    Vec3 color = {0.7f, 0.72f, 0.75f};
+    float alpha = 0.5f;
+    float rise = 0.3f, accel = 0;     // upward speed and its growth
+    float curl = 0.05f, curl_hz = 0.7f; // sideways meander of a wisp
+    Vec3 wind;
+    float size0 = 0.05f, size1 = 0.3f, grow = 0.4f; // sprite or ribbon width over life
+    int count = 6, points = 48;
+    float fwd = 1, spread = 0.3f, up = 0; // puff/spark launch: along dir, random, upward
+    Vec3 dir = {-1, 0, 0};                 // launch direction in the part's frame (default: out the muzzle)
+    float drag = 3;
+    float warm = 0.06f;                    // seconds a fresh puff stays lit by the flash
+    // where the emitter was, sampled at load: a table over the loop, and at each shot
+    std::vector<Vec3> path_pos, path_fwd, shot_pos, shot_fwd;
 };
 
 struct Anim {
@@ -87,13 +103,33 @@ struct Anim {
 
 bool load_anim(const std::string& path, const Rig& rig, Anim& out);
 
+// smoke and sparks for one frame, in model space
+struct FxSprite {
+    Vec3 pos;
+    float size, angle;
+    Vec3 color; // linear
+    float alpha; // 0 makes it purely additive (sparks)
+    int tile;
+};
+
+struct FxRibbon {
+    std::vector<Vec3> pts;
+    std::vector<float> width, alpha;
+    Vec3 color;
+};
+
 // per-part matrices for time t (seconds, wrapped into the loop)
 struct Pose {
     std::vector<Mat4> bones;
     std::vector<Vec3> glow;
+    std::vector<FxSprite> sprites;
+    std::vector<FxRibbon> ribbons;
 };
 
 void evaluate(const Anim& anim, const Rig& rig, float t, Pose& out);
 // the rest pose, for models without animation
 void rest_pose(const Rig& rig, Pose& out);
+// samples effect emitters over the loop (needs the finished anim); and the effects at t
+void fx_prepare(Anim& anim, const Rig& rig);
+void fx_evaluate(const Anim& anim, float t, Pose& out);
 float ease(const EaseSpec& e, float t);

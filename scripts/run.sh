@@ -21,17 +21,11 @@ import json, sys
 outs = [o for o in json.load(sys.stdin) if o["active"]]
 r = min(outs, key=lambda o: o["rect"]["x"])["rect"]
 print(r["x"] + (r["width"] - 1280) // 2, r["y"] + (r["height"] - 720) // 2)')
+    # find the viewer by its own process id, never by title (other windows share the name)
     for _ in $(seq 50); do
-        con=$(i3-msg -t get_tree | python3 -c '
-import json, sys
-def walk(n):
-    if (n.get("window_properties") or {}).get("title", "").startswith("genmodel"):
-        print(n["id"]); sys.exit()
-    for c in n.get("nodes", []) + n.get("floating_nodes", []):
-        walk(c)
-walk(json.load(sys.stdin))')
-        if [ -n "$con" ]; then
-            i3-msg "[con_id=$con] floating enable, resize set 1280 720, move absolute position ${geom% *} ${geom#* }" >/dev/null
+        wid=$(xdotool search --pid "$pid" 2>/dev/null | head -1)
+        if [ -n "$wid" ] && i3-msg -t get_tree | grep -q "\"window\":$wid,"; then
+            i3-msg "[id=$wid] floating enable, resize set 1280 720, move absolute position ${geom% *} ${geom#* }" >/dev/null
             break
         fi
         sleep 0.1

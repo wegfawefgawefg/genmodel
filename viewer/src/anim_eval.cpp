@@ -1,5 +1,6 @@
 // turns an Anim and a time into one matrix per rig part
 #include "anim.hpp"
+#include "anim_util.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -39,46 +40,6 @@ float ease_one(Ease e, float t) {
         return 1 - std::exp(-6 * t) * std::cos(15 * t);
     }
     return t;
-}
-
-// integer hash -> [0, 1)
-float hash01(uint32_t a, uint32_t b) {
-    uint32_t h = a * 0x9E3779B1u ^ (b + 0x7F4A7C15u) * 0x85EBCA77u;
-    h ^= h >> 15;
-    h *= 0x2C1B3C6Du;
-    h ^= h >> 12;
-    h *= 0x297A2D39u;
-    h ^= h >> 15;
-    return (float)(h & 0xFFFFFF) / (float)0x1000000;
-}
-
-// smooth 1d value noise in [-1, 1]
-float noise1(float x, uint32_t seed) {
-    float i = std::floor(x);
-    float f = x - i;
-    float u = f * f * (3 - 2 * f);
-    float a = hash01((uint32_t)(int32_t)i, seed) * 2 - 1;
-    float b = hash01((uint32_t)(int32_t)i + 1, seed) * 2 - 1;
-    return a + (b - a) * u;
-}
-
-float table_at(const std::vector<float>& tab, float dt, float t) {
-    if (tab.empty()) {
-        return 0;
-    }
-    float x = t / dt;
-    int i = std::clamp((int)x, 0, (int)tab.size() - 2);
-    float f = clamp01(x - i);
-    return tab[i] * (1 - f) + tab[i + 1] * f;
-}
-
-float drive(const Anim& a, const Drive& d, float t) {
-    float v = 1;
-    if (d.driver == Driver::rate) v = table_at(a.rate_table, a.table_dt, t);
-    if (d.driver == Driver::heat) v = table_at(a.heat_table, a.table_dt, t);
-    if (d.driver == Driver::idle) v = table_at(a.idle_table, a.table_dt, t);
-    v *= d.k;
-    return d.eased ? ease(d.ease, clamp01(v)) : v;
 }
 
 struct Acc {
@@ -267,6 +228,8 @@ float ease(const EaseSpec& e, float t) {
 void rest_pose(const Rig& rig, Pose& out) {
     out.bones.assign(rig.parts.size(), Mat4{});
     out.glow.assign(rig.parts.size(), Vec3{});
+    out.sprites.clear();
+    out.ribbons.clear();
 }
 
 void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
@@ -303,6 +266,10 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
             break;
         case TrackKind::throw_:
             run_throw(a, tr, t, acc);
+            break;
+        case TrackKind::wisp:
+        case TrackKind::puff:
+        case TrackKind::spark:
             break;
         default:
             run_continuous(a, tr, t, acc);

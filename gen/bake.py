@@ -92,12 +92,15 @@ def to_lin(c):
     return (np.asarray(c, F) / 255.0) ** 2.2
 
 
-def shade(scene, p, n, unit):
-    """Albedo (linear) and spec for texel points p with normals n. unit is a typical
-    detail size in model units, used for wear widths and noise scale."""
-    nodes = scene.bake_nodes()
+def shade(scene, p, n, unit, piece):
+    """Albedo (linear) and spec for texel points p with normals n, each on scene.pieces[piece].
+    unit is a typical detail size in model units, used for wear widths and noise scale."""
     solid = scene.bake_nodes(include_free=False)
-    _, mat = scene.union_eval(p - n * unit * 0.05, nodes)
+    # material comes from the texel's own piece, so overlapping pieces can't steal it
+    mat = np.zeros(len(p), np.int16)
+    for k in np.unique(piece):
+        idx = np.nonzero(piece == k)[0]
+        _, mat[idx] = scene.pieces[k].bake_node().eval(p[idx] - n[idx] * unit * 0.05)
     mats = scene.materials
     base = np.array([to_lin(m.color) for m in mats], F)[mat]
     wear_col = np.array([to_lin(m.wear) for m in mats], F)[mat]
@@ -143,6 +146,20 @@ def shade(scene, p, n, unit):
     speck = (fine > 0.78) & paint
     col = np.where(speck[:, None], col * 0.75 + dirt_col * 0.1, col)
     spec = spec * (1 - 0.6 * grime)
+
+    # rust: patchy, worse in creases, under overhangs and where paint has chipped,
+    # bleeding down in streaks; how much varies from region to region
+    if scene.rust > 0:
+        rust_mat = np.array([m.rust for m in mats], F)[mat]
+        region = fbm(p / (unit * 30), 2, seed=61)
+        patch = fbm(p / (unit * 5), 4, seed=53)
+        streak = fbm(p * np.array([1, 0.08, 1], F) / (unit * 1.5), 3, seed=57)
+        drip = smoothstep(0.1, -0.6, n[:, 1]) * 0.25 + (1 - ao_near) * 0.5
+        want = patch + 0.55 * crease + drip + 0.45 * streak * smoothstep(0.3, 0.7, region) + 0.6 * chip
+        amount = smoothstep(0.95, 1.35, want + region * 0.5) * rust_mat * scene.rust
+        rust_col = to_lin((66, 32, 16)) * (1 - fine[:, None]) + to_lin((150, 72, 30)) * fine[:, None]
+        col = col * (1 - amount[:, None]) + rust_col * amount[:, None]
+        spec = spec * (1 - 0.8 * amount)
 
     # light streaky scratches on paint
     streak = fbm(p * np.array([1, 12, 1], F) / (unit * 3), 2, seed=21)
@@ -190,12 +207,12 @@ _JOB = None
 
 
 def _shade_chunk(span):
-    scene, p, n, unit = _JOB
+    scene, p, n, unit, piece = _JOB
     a, b = span
-    return shade(scene, p[a:b], n[a:b], unit)
+    return shade(scene, p[a:b], n[a:b], unit, piece[a:b])
 
 
-def bake(scene, verts, normals, faces, uvs, size, unit):
+def bake(scene, verts, normals, faces, uvs, size, unit, face_piece):
     tri, bary = rasterize(uvs, faces, size)
     covered = tri >= 0
     ys, xs = np.nonzero(covered)
@@ -209,7 +226,7 @@ def bake(scene, verts, normals, faces, uvs, size, unit):
 
     # shade in parallel; workers inherit the scene through fork
     global _JOB
-    _JOB = (scene, p, nn, unit)
+    _JOB = (scene, p, nn, unit, face_piece[t])
     chunk = 20_000
     starts = list(range(0, len(p), chunk))
     with mp.get_context("fork").Pool(os.cpu_count()) as pool:

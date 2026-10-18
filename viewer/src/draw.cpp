@@ -55,7 +55,7 @@ void main() {
         float facing = abs(dot(normalize(v_nrm), normalize(-v_view_pos)));
         vec3 edge = vec3(1.0, 0.22, 0.02);
         vec3 flame = mix(edge, t.rgb * vec3(1.0, 0.95, 0.85), facing * facing);
-        o_color = vec4(flame * (0.25 + 1.1 * facing) + v_glow, 1.0);
+        o_color = vec4(flame * (0.45 + 1.6 * facing) + v_glow, 1.0);
         return;
     }
     vec3 albedo = pow(t.rgb, vec3(2.2));
@@ -220,7 +220,7 @@ bool gpu_init(Gpu& gpu) {
     glGenBuffers(1, &gpu.vbo);
     glGenBuffers(1, &gpu.ibo);
     glGenTextures(1, &gpu.texture);
-    return true;
+    return fx_init(gpu);
 }
 
 void gpu_upload(Gpu& gpu, Model& model, const Rig& rig) {
@@ -336,6 +336,12 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const P
         glDisable(GL_CULL_FACE);
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
+    }
+
+    if (mode == 0) {
+        fx_draw(gpu, pose, view, proj, Vec3{eye[0], eye[1], eye[2]});
+        glUseProgram(gpu.program);
+        glBindVertexArray(gpu.vao);
     }
 
     if (opt.wire) {
