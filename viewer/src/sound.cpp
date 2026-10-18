@@ -260,9 +260,9 @@ void sound_render(const SoundBank& bank, const Anim& a, double t0, int frames, f
             out[i * 2 + 1] += v;
         }
     }
-    // gentle limiter so stacked shots don't clip
+    // soft saturation: stacked shots bark rather than clip
     for (int i = 0; i < frames * 2; i++) {
-        out[i] = std::tanh(out[i]) * 0.95f;
+        out[i] = std::tanh(out[i] * 1.6f) / std::tanh(1.6f) * 0.9f;
     }
 }
 

@@ -45,10 +45,8 @@
   (rest upper_barrel_flash lower_barrel_flash (scale 0))
   (rest case.* (scale 0))
 
-  ; the gunner braces before the burst and lets go after it
-  (kick root (at 0.6) (move 0.02 -0.015 0) (rot 0 0 1 1.8) (attack 0.55 expo-inout) (release 2.6 smooth))
-  (kick root (at 7.0) (move -0.03 0.012 0) (rot 0 0 1 -2.2) (attack 0.1 expo-out) (release 1.6 spring 1.3 0.3))
-  (kick drum (at 7.0) (rot 1 0 0 5) (attack 0.14 expo-out) (release 1.8 spring 1.1 0.16))
+  ; the gunner braces before the burst, then eases off as it ends
+  (kick root (at 0.6) (move 0.02 -0.015 0) (rot 0 0 1 1.8) (attack 0.55 expo-inout) (release 6.0 smooth))
 
   ; the barrels take turns: even shots fire the top one. Each slams back a long way
   ; and comes home on a soft spring, overshooting forward once.
@@ -144,7 +142,7 @@
   (on-shot (every 2 0) (sound shot (pan -0.3)))
   (on-shot (every 2 1) (sound shot (pan 0.3)))
   (on-shot (sound case))
-  (sound settle (at 7.0))
+  (sound settle (at 6.15))
   (hum whine (by rate 0.125) (pitch 0.55 1.3))
   (hum whirr (by spin 1) (pitch 0.3 1.15))
   (hum sizzle (by smoulder 2.5 smooth) (pitch 0.95 1.05)))
