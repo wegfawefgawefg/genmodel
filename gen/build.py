@@ -90,7 +90,8 @@ def mesh_pieces(scene, coarse, poly=False):
 def load_style(name):
     """gen/styles/<name>.sexp as a flat dict of settings."""
     form = parse_sexp(open(os.path.join(ROOT, "gen", "styles", name + ".sexp")).read())[0]
-    st = {}
+    # (base other) starts from another style and overrides what this one says
+    st = load_style(field(form, "base")[0]) if field(form, "base") else {}
     for key in ("facets", "texture"):
         if field(form, key):
             st[key] = int(field(form, key)[0])
@@ -104,7 +105,8 @@ def load_style(name):
     norm = field(form, "normals")
     if norm and norm[0] == "flat":
         st["flat"] = float(norm[1]) if len(norm) > 1 else 20.0
-    st["palette"] = {p[0]: tuple(int(c) for c in p[1:4]) for p in (field(form, "palette") or [])}
+    if field(form, "palette"):
+        st["palette"] = {p[0]: tuple(int(c) for c in p[1:4]) for p in field(form, "palette")}
     return st
 
 
@@ -132,7 +134,7 @@ def main():
         # small repeated parts (coil rings, links) fall apart below a few dozen triangles
         pc.tris = max(int(pc.tris * style.get("tris", 1.0)), min(pc.tris, 28))
     for m in scene.materials:
-        if m.name in style.get("palette", {}):
+        if m.name in style.get("palette", {}):  # styles without a palette keep the model's
             m.color = style["palette"][m.name]
     out_name = args.model + ("-" + style_name if style_name and style_name != native else "")
 
