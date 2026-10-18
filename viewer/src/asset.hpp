@@ -3,6 +3,7 @@
 #include "anim.hpp"
 #include "model.hpp"
 #include "rig.hpp"
+#include "sound.hpp"
 
 #include <cstdint>
 #include <string>
@@ -15,6 +16,7 @@ struct Asset {
     Rig rig;
     Anim anim;
     bool animated = false;
+    SoundBank sound; // <name>.sound.sexp beside the anim, clips in <obj dir>/sounds
 };
 
 bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset& out);

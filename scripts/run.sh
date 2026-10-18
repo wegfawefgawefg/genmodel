@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # opens the viewer on your screen: scripts/run.sh [model-name]   (default: liedersanger)
 # drag: orbit, right drag: pan, wheel: zoom, W wire, C clay, U uvs, space spin, R reset, Esc quit
-# P pause, , . step a frame, [ ] slower/faster; edit gen/models/<name>.anim.sexp live
+# P pause, , . step a frame, [ ] slower/faster, M mute; edit gen/models/<name>.anim.sexp and
+# <name>.sound.sexp live
 # the window reloads by itself whenever the generator rewrites the model
 set -e
 cd "$(dirname "$0")/.."
@@ -11,6 +12,10 @@ cmake -S viewer -B build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
 ninja -C build >/dev/null
 anim=()
 [ -f "gen/models/$name.anim.sexp" ] && anim=(--anim "gen/models/$name.anim.sexp")
+# sound clips from the bank (rerun tools/sounds.py after editing samples; cues reload live)
+if [ -f "gen/models/$name.sound.sexp" ] && [ -d ref/sounds ]; then
+    .venv/bin/python tools/sounds.py "$name" >/dev/null
+fi
 GENMODEL_ON_SCREEN=1 ./build/viewer "out/$name/$name.obj" "${anim[@]}" --yaw -30 --pitch 10 &
 pid=$!
 

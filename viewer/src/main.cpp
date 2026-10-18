@@ -8,6 +8,7 @@
 #include <GL/glcorearb.h>
 #include <SDL3/SDL.h>
 
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -21,6 +22,8 @@ struct Args {
     std::string capture;
     bool sheet = false;     // four standard views in a 2x2 grid
     bool print_shots = false; // print the animation's shot times and fire rate, then exit
+    std::string audio;      // write the soundtrack (from --time, --audio-secs long) to a wav
+    float audio_secs = 10;
     int turntable = 0;      // frames to write to a %d pattern, orbiting and animating
     float spin_secs = 0;    // seconds per orbit in a turntable (0: one orbit over all frames)
     float time = 0;         // animation time of a still, or of a turntable's first frame
@@ -44,6 +47,10 @@ static bool parse_args(int argc, char** argv, Args& a) {
             a.spin_secs = (float)atof(argv[++i]);
         } else if (s == "--time" && has_next) {
             a.time = (float)atof(argv[++i]);
+        } else if (s == "--audio" && has_next) {
+            a.audio = argv[++i];
+        } else if (s == "--audio-secs" && has_next) {
+            a.audio_secs = (float)atof(argv[++i]);
         } else if (s == "--print-shots") {
             a.print_shots = true;
         } else if (s == "--sheet") {
@@ -100,6 +107,46 @@ static std::vector<Shot> turntable_shots(const Args& a) {
     return shots;
 }
 
+// live sound: the device pulls blocks rendered from the shared, stateless mixer; while it
+// plays, its clock is the animation's clock
+struct AudioOut {
+    SDL_AudioStream* stream = nullptr;
+    Asset* asset = nullptr;
+    std::atomic<double> time{0};
+    std::atomic<bool> playing{false};
+    std::vector<float> block;
+};
+
+static void SDLCALL pull_audio(void* user, SDL_AudioStream* stream, int additional, int /*total*/) {
+    AudioOut* ao = (AudioOut*)user;
+    int frames = additional / (int)(2 * sizeof(float));
+    if (frames <= 0) {
+        return;
+    }
+    ao->block.assign((size_t)frames * 2, 0.0f);
+    if (ao->playing && ao->asset->animated) {
+        double t = ao->time;
+        sound_render(ao->asset->sound, ao->asset->anim, t, frames, ao->block.data());
+        ao->time = t + (double)frames / sound_rate;
+    }
+    SDL_PutAudioStreamData(stream, ao->block.data(), frames * (int)(2 * sizeof(float)));
+}
+
+static void open_audio(AudioOut& ao, Asset& asset) {
+    ao.asset = &asset;
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        fprintf(stderr, "no audio: %s\n", SDL_GetError());
+        return;
+    }
+    SDL_AudioSpec spec = {SDL_AUDIO_F32, 2, sound_rate};
+    ao.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, pull_audio, &ao);
+    if (!ao.stream) {
+        fprintf(stderr, "no audio device: %s\n", SDL_GetError());
+        return;
+    }
+    SDL_ResumeAudioStreamDevice(ao.stream);
+}
+
 static int run_window(const Args& a, Asset& asset) {
     SDL_SetHint(SDL_HINT_APP_ID, "genmodel-viewer");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -133,8 +180,12 @@ static int run_window(const Args& a, Asset& asset) {
         return 1;
     }
     gpu_upload(gpu, asset.model, asset.rig);
+    AudioOut audio;
+    open_audio(audio, asset);
+    bool muted = false;
     printf("drag: orbit   right drag: pan   wheel: zoom   W: wire   C: clay   U: uvs\n"
-           "space: spin   R: reset view   P: pause   , .: step   [ ]: slower/faster   Esc: quit\n"
+           "space: spin   R: reset view   P: pause   , .: step   [ ]: slower/faster   M: mute\n"
+           "Esc: quit\n"
            "(reloads when the model or animation files change)\n");
 
     Camera cam = a.cam;
@@ -190,6 +241,8 @@ static int run_window(const Args& a, Asset& asset) {
                     speed = std::fmax(speed * 0.5f, 1.0f / 64.0f);
                 } else if (k == SDLK_RIGHTBRACKET) {
                     speed = std::fmin(speed * 2.0f, 4.0f);
+                } else if (k == SDLK_M) {
+                    muted = !muted;
                 }
             }
         }
@@ -204,7 +257,10 @@ static int run_window(const Args& a, Asset& asset) {
                 SDL_Delay(200); // let the writer finish
                 Asset fresh;
                 if (load_asset(asset.obj_path, asset.anim_path, fresh)) {
+                    // the audio thread reads the asset; swap it under the stream's lock
+                    if (audio.stream) SDL_LockAudioStream(audio.stream);
                     asset = std::move(fresh);
+                    if (audio.stream) SDL_UnlockAudioStream(audio.stream);
                     gpu_upload(gpu, asset.model, asset.rig);
                 }
             }
@@ -214,7 +270,24 @@ static int run_window(const Args& a, Asset& asset) {
         if (spin) {
             cam.yaw += dt * 0.5f;
         }
-        if (!paused) {
+        // sound plays only at normal speed; then its clock leads (minus what's still queued)
+        bool want_sound = audio.stream && !muted && !paused && speed == 1.0f && asset.animated;
+        if (want_sound && !audio.playing) {
+            audio.time = (double)anim_time;
+            audio.playing = true;
+        } else if (!want_sound && audio.playing) {
+            audio.playing = false;
+        }
+        if (audio.playing) {
+            // run on wall time but lean toward the audio clock, which moves in device blocks
+            double queued = SDL_GetAudioStreamQueued(audio.stream) / (double)(2 * sizeof(float) * sound_rate);
+            float heard = (float)(audio.time - queued);
+            anim_time += dt;
+            anim_time += (heard - anim_time) * 0.1f;
+            if (std::fabs(heard - anim_time) > 0.1f) {
+                anim_time = heard;
+            }
+        } else if (!paused) {
             anim_time += dt * speed;
         }
 
@@ -224,6 +297,9 @@ static int run_window(const Args& a, Asset& asset) {
         asset_pose(asset, anim_time, pose);
         gpu_draw(gpu, cam, opt, pose, w, h);
         SDL_GL_SwapWindow(window);
+    }
+    if (audio.stream) {
+        SDL_DestroyAudioStream(audio.stream);
     }
     SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(window);
@@ -236,7 +312,8 @@ int main(int argc, char** argv) {
     if (!parse_args(argc, argv, a)) {
         fprintf(stderr, "usage: viewer model.obj [--anim file.anim.sexp] [--capture out.png [--sheet |\n"
                         "       --turntable frames [--spin-secs s]]] [--time t] [--size w h]\n"
-                        "       [--yaw deg] [--pitch deg] [--zoom z] [--wire] [--clay] [--uv]\n");
+                        "       [--yaw deg] [--pitch deg] [--zoom z] [--wire] [--clay] [--uv]\n"
+                        "       [--audio out.wav [--audio-secs s]] [--print-shots]\n");
         return 1;
     }
     Asset asset;
@@ -252,6 +329,13 @@ int main(int argc, char** argv) {
             printf("rate %.4f %.3f %.3f\n", i * asset.anim.table_dt, asset.anim.rate_table[i], asset.anim.heat_table[i]);
         }
         return 0;
+    }
+    if (!a.audio.empty()) {
+        std::vector<float> pcm((size_t)(a.audio_secs * sound_rate) * 2);
+        sound_render(asset.sound, asset.anim, a.time, (int)(pcm.size() / 2), pcm.data());
+        bool ok = asset.sound.ok && write_wav16(a.audio, pcm);
+        printf(ok ? "wrote %s\n" : "no sound for %s\n", a.audio.c_str());
+        return ok ? 0 : 1;
     }
     if (!a.capture.empty()) {
         std::vector<Shot> shots;

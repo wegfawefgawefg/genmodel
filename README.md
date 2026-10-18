@@ -14,6 +14,16 @@ Not an exact copy; the goal is the general structure of the reference with a cle
    from curvature, ambient occlusion, texture-only details (seams, screws) and projected decals.
 5. Output: `out/<name>/<name>.obj` + `.mtl` + `.png` (RGB albedo, alpha = specular).
 
+## Animation and sound
+
+- `gen/models/<name>.anim.sexp`: a fire-rate curve decides when shots happen; tracks kick,
+  step, feed, throw, shake, wave, lean and glow rig parts, and emit smoke (wisp, puff, spark).
+- `gen/models/<name>.sound.sexp`: samples (cut, fades, filters, room, baked once by
+  `tools/sounds.py` into `out/<name>/sounds/`) and cues (layers with gain/pitch/delay/pan ranges).
+  The anim's `sound` and `hum` tracks trigger cues on the same events as the motion.
+- Everything is a function of time: live playback, scrubbing and videos see and hear the same thing.
+- Source sounds live in `ref/sounds/` (local only, see its CREDITS.txt).
+
 ## Use
 
     python3 -m venv .venv && .venv/bin/pip install numpy scipy scikit-image xatlas pyfqmr pillow
@@ -21,8 +31,10 @@ Not an exact copy; the goal is the general structure of the reference with a cle
     .venv/bin/python gen/build.py liedersanger --fast   # coarse voxels, 1024 texture
     scripts/run.sh                                       # viewer window (floats on i3, left monitor)
     scripts/shot.sh liedersanger out.png --sheet         # headless GPU render, no window
+    scripts/anim.sh liedersanger 18                      # animated video with sound
 
 Viewer: drag to orbit, right drag to pan, wheel to zoom, W wireframe, C clay, U uv checker,
-space to spin, R to reset. It reloads whenever the model files change.
+space to spin, R to reset, P pause, `,` `.` step, `[` `]` speed, M mute. It reloads whenever the
+model, animation or sound files change.
 
 The viewer refuses to open a window when run by an agent (CLAUDECODE set); agents use `--capture`.

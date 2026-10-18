@@ -41,7 +41,7 @@ struct Motion {
     Vec3 glow;
 };
 
-enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean, wisp, puff, spark };
+enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean, wisp, puff, spark, sound, hum };
 
 struct Track {
     TrackKind kind = TrackKind::kick;
@@ -81,6 +81,9 @@ struct Track {
     Vec3 dir = {-1, 0, 0};                 // launch direction in the part's frame (default: out the muzzle)
     float drag = 3;
     float warm = 0.06f;                    // seconds a fresh puff stays lit by the flash
+    // sound (on shots or at a time) and hum (a loop following `by`): the cue to play
+    std::string cue;
+    float gain = 1, pan = 0, pitch_lo = 1, pitch_hi = 1;
     // where the emitter was, sampled at load: a table over the loop, and at each shot
     std::vector<Vec3> path_pos, path_fwd, shot_pos, shot_fwd;
 };

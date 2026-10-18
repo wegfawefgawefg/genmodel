@@ -17,6 +17,8 @@
 ; (wisp part (from x y z) (by heat k) (points n) (life secs) (rise speed accel) (curl amp hz)
 ;       (size start end grow-secs) (color r g b alpha) (wind x y z))
 ;   a smoke ribbon trailing off the point; each parcel keeps the meander of when it left
+; (sound cue (pan p) (gain g) [(at secs)])  plays a cue from liedersanger.sound.sexp on shots
+; (hum cue (by driver k) (pitch lo hi) (gain g))  a looping cue whose level and pitch follow
 ; drivers: rate (shots/s), heat, idle (1 when not firing), smoulder (heat * idle: hot, settled)
 ; eases: linear smooth expo-in expo-out expo-inout superexp back spring, or (mix a b w)
 
@@ -126,4 +128,12 @@
   (wisp root (from -2.24 -0.15 0.075) (by smoulder 2.2) (points 96) (life 3.4) (rise 0.3 0.04)
     (curl 0.012 0.21) (wind 0.05 0 -0.02) (size 0.018 0.11 1.5) (color 0.84 0.86 0.9 0.8))
   (wisp root (from -2.24 -0.15 0.075) (by smoulder 2.2) (points 72) (life 3.0) (rise 0.26 0.04)
-    (curl 0.022 0.15) (wind 0.06 0 -0.02) (size 0.03 0.26 1.2) (color 0.74 0.76 0.8 0.24)))
+    (curl 0.022 0.15) (wind 0.06 0 -0.02) (size 0.03 0.26 1.2) (color 0.74 0.76 0.8 0.24))
+
+  ; sound: every shot, panned toward the barrel that fired; cases land on their own cue;
+  ; the motor whine climbs with the fire rate; the settle gets its own thud
+  (on-shot (every 2 0) (sound shot (pan -0.3)))
+  (on-shot (every 2 1) (sound shot (pan 0.3)))
+  (on-shot (sound case))
+  (sound settle (at 7.0))
+  (hum whine (by rate 0.125) (pitch 0.55 1.3)))

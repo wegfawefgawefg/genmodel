@@ -38,6 +38,7 @@ add_executable(viewer
     src/sexp_read.cpp
     src/anim_fx.cpp
     src/fx_draw.cpp
+    src/sound.cpp
 )
 target_include_directories(viewer PRIVATE src /usr/include/stb)
 target_compile_definitions(viewer PRIVATE GL_GLEXT_PROTOTYPES)

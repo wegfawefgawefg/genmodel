@@ -9,6 +9,19 @@ static std::string rig_path_for(const std::string& obj_path) {
     return (p.parent_path() / (p.stem().string() + ".rig.sexp")).string();
 }
 
+// m.anim.sexp -> m.sound.sexp
+static std::string bank_path_for(const std::string& anim_path) {
+    const std::string tail = ".anim.sexp";
+    if (anim_path.size() < tail.size() || anim_path.compare(anim_path.size() - tail.size(), tail.size(), tail) != 0) {
+        return "";
+    }
+    return anim_path.substr(0, anim_path.size() - tail.size()) + ".sound.sexp";
+}
+
+static std::string clip_dir_for(const std::string& obj_path) {
+    return (fs::path(obj_path).parent_path() / "sounds").string();
+}
+
 bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset& out) {
     Asset a;
     a.obj_path = obj_path;
@@ -23,6 +36,10 @@ bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset
         a.animated = load_anim(anim_path, a.rig, a.anim);
         if (a.animated) {
             fx_prepare(a.anim, a.rig);
+            std::string bank = bank_path_for(anim_path);
+            if (!bank.empty() && fs::exists(bank) && load_sound_bank(bank, clip_dir_for(obj_path), a.sound)) {
+                sound_prepare(a.sound, a.anim);
+            }
         }
     }
     out = std::move(a);
@@ -49,6 +66,11 @@ int64_t asset_stamp(const Asset& a) {
     s = std::max(s, stamp_of(rig_path_for(a.obj_path)));
     if (!a.anim_path.empty()) {
         s = std::max(s, stamp_of(a.anim_path));
+        s = std::max(s, stamp_of(bank_path_for(a.anim_path)));
+        std::error_code ec;
+        for (const auto& e : fs::directory_iterator(clip_dir_for(a.obj_path), ec)) {
+            s = std::max(s, stamp_of(e.path().string()));
+        }
     }
     return s;
 }

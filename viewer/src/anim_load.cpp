@@ -90,6 +90,8 @@ TrackKind kind_named(const std::string& s, bool& ok) {
     if (s == "wisp") return TrackKind::wisp;
     if (s == "puff") return TrackKind::puff;
     if (s == "spark") return TrackKind::spark;
+    if (s == "sound") return TrackKind::sound;
+    if (s == "hum") return TrackKind::hum;
     ok = false;
     return TrackKind::kick;
 }
@@ -107,7 +109,9 @@ bool read_track(gsexp::Node form, const Rig& rig, int every, int offset, Track& 
         gsexp::Node c = form.child_at(i);
         if (!c.is_list()) {
             std::string name(c.text());
-            if (t.kind == TrackKind::feed) {
+            if (t.kind == TrackKind::sound || t.kind == TrackKind::hum) {
+                t.cue = name;
+            } else if (t.kind == TrackKind::feed) {
                 for (size_t p = 0; p < rig.paths.size(); p++) {
                     if (rig.paths[p].name == name) {
                         t.path = (int)p;
@@ -179,6 +183,13 @@ bool read_track(gsexp::Node form, const Rig& rig, int every, int offset, Track& 
             t.fwd = num(c.child_at(1));
             t.spread = num(c.child_at(2));
             t.up = num(c.child_at(3));
+        } else if (h == "gain") {
+            t.gain = num(c.child_at(1), 1);
+        } else if (h == "pan") {
+            t.pan = num(c.child_at(1), 0);
+        } else if (h == "pitch") {
+            t.pitch_lo = num(c.child_at(1), 1);
+            t.pitch_hi = num(c.child_at(2), t.pitch_lo);
         } else if (h == "dir") {
             t.dir = norm(vec_at(c, 1));
         } else if (h == "drag") {
