@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(ROOT, "gen"))
 
 import sdf  # noqa: E402
 
+JOINT_BALL = 0.3  # around a joint, a part and its parent overlap on purpose (knuckle in housing)
+
 
 def surface_points(obj_path, keep=260):
     """Per group (rig part): its vertices and face centres in rest model space, thinned."""
@@ -53,6 +55,12 @@ class Checker:
             if not pc.free:
                 self.bodies.setdefault(pc.part, []).append(pc.body)
         self.pts = surface_points(os.path.join(ROOT, "out", name, name + ".obj"))
+        # rest joint positions (each part's pivot) from the rig
+        self.pivot = {}
+        for line in open(os.path.join(ROOT, "out", name, name + ".rig.sexp")):
+            f = line.replace("(", " ").replace(")", " ").split()
+            if len(f) >= 6 and f[0] == "part" and f[2] == "pivot":
+                self.pivot[f[1]] = np.array([float(x) for x in f[3:6]], np.float32)
         # rest bounding spheres for a quick reject
         self.sphere = {}
         for part, nodes in self.bodies.items():
@@ -92,7 +100,7 @@ class Checker:
                     continue
                 wa = None
                 for b, nodes in self.bodies.items():
-                    if b == a or b not in centres or parent.get(a) == b or parent.get(b) == a:
+                    if b == a or b not in centres:
                         continue
                     # a ram's rod lives inside its cylinder
                     if "." in a and a.split(".")[0] == b.split(".")[0]:
@@ -101,8 +109,16 @@ class Checker:
                         continue
                     if wa is None:
                         wa = pa @ bones[a][:3, :3].T + bones[a][:3, 3]
+                    pts_a = wa
+                    # a part and its parent meet at their joint by design: ignore a ball there
+                    child = a if parent.get(a) == b else (b if parent.get(b) == a else None)
+                    if child is not None and child in self.pivot:
+                        j = bones[child][:3, :3] @ self.pivot[child] + bones[child][:3, 3]
+                        pts_a = wa[np.linalg.norm(wa - j, axis=1) > JOINT_BALL]
+                        if len(pts_a) == 0:
+                            continue
                     inv = np.linalg.inv(bones[b])
-                    q = (wa @ inv[:3, :3].T + inv[:3, 3]).astype(np.float32)
+                    q = (pts_a @ inv[:3, :3].T + inv[:3, 3]).astype(np.float32)
                     d = np.min([n.dist(q) for n in nodes], axis=0)
                     depth = float(-d.min())
                     if depth > 0.01:

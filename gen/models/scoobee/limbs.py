@@ -8,7 +8,7 @@ from models.scoobee import (ANKLE, BALL, CHROME, DARK, ELBOW, GLASS, GRIP, HIP, 
                             SHOULDER, TAN, WRIST)
 from models.scoobee.kit import bolt_ring, bolts, hose, piston
 from scene import Piece
-from sdf import Box, Cylinder, Loft, Union, segment
+from sdf import Box, Cylinder, Loft, Prism, Union, segment
 
 THIGH_LEN = 0.95
 SHIN_LEN = 2.05
@@ -24,7 +24,7 @@ def thigh():
         Box(0.09, 0.08, 0.1, DARK, ch=0.03).at(0, -THIGH_LEN + 0.14, -0.02),
     )
     # the knee ram's top pin on the outer side (the ram is an assembly part, so it slides)
-    lug = Box(0.06, 0.07, 0.07, DARK, ch=0.02).at(0.15, -0.24, 0.1)
+    lug = Union(Box(0.1, 0.06, 0.05, DARK, ch=0.02).at(0.16, -0.24, 0.12), Box(0.03, 0.07, 0.07, DARK, ch=0.015).at(0.27, -0.24, 0.16))
     body = Union(knuckle(HIP, DARK), strut, lug, housing(KNEE, DARK, CHROME).at(*k),
                  bolts([(0.18, -0.25, 0.12), (0.18, -0.6, 0.14)], 0.016, axis="x"))
     pieces = [Piece("plate", plate, h=0.025, tris=120), Piece("frame", body, h=0.02, tris=500)]
@@ -33,23 +33,24 @@ def thigh():
 
 
 def shin():
-    """The tall tapered shin pod: slim at the knee, swelling low, a rust hem at its foot,
-    an orange band and a rear spine with a ram down to the ankle."""
-    # panelled and tapered, deeper front to back than wide, swept slightly forward low down
-    stations = [(0.16, 0.12, 0.13, 0.0), (0.0, 0.15, 0.18, 0.0), (-0.5, 0.21, 0.27, 0.03), (-1.3, 0.28, 0.35, 0.07),
+    """The tall tapered shin pod: slim under the knee, swelling low, a rust hem at its foot,
+    an orange band, a knee horn in front and a gusset behind carrying the calf ram's pin."""
+    # panelled and tapered, deeper front to back than wide, swept slightly forward low down;
+    # it starts below the knee knuckle so it never sweeps through the thigh as the knee bends
+    stations = [(-0.14, 0.12, 0.13, 0.0), (-0.26, 0.15, 0.18, 0.0), (-0.6, 0.21, 0.27, 0.03), (-1.3, 0.28, 0.35, 0.07),
                 (-1.68, 0.28, 0.33, 0.06), (-1.94, 0.19, 0.22, 0.03)]
     shell = Loft(stations, TAN).at(0, 0, 0.02)
     shell = sdf.Paint(shell, Box(2.0, 0.09, 2.0, ORANGE).at(0, -1.12, 0), ORANGE)
     shell = sdf.Paint(shell, Box(2.0, 0.07, 2.0, RUST).at(0, -1.9, 0), RUST)
     ankle_at = (0.0, -SHIN_LEN, 0.0)
     spine = Union(
-        Box(0.05, 0.6, 0.05, DARK, ch=0.02).at(0, -0.9, -0.3),
         # the knee horn: a lever ahead of the knee axis for the extensor ram to drive
-        segment((0.1, -0.12, 0.08), (0.2, -0.2, 0.27), 0.05, DARK),
-        Box(0.04, 0.06, 0.06, DARK, ch=0.02).at(0.2, -0.2, 0.27),
-        Box(0.05, 0.07, 0.06, DARK, ch=0.02).at(0, -0.95, -0.36),    # calf ram pin
-        hose((0.12, -0.3, -0.18), (0.24, -1.4, -0.2), 0.08, 0.02, (1, 0, -0.3)),
-        bolt_ring((0, -0.12, 0.02), 0.16, 8, axis="y", r=0.016),
+        segment((0.1, -0.16, 0.08), (0.27, -0.2, 0.27), 0.05, DARK),
+        Box(0.03, 0.06, 0.06, DARK, ch=0.02).at(0.29, -0.2, 0.27),
+        # a triangular gusset off the upper back of the shin out to the calf ram's pin
+        Prism([(-0.36, -0.12), (-0.98, -0.2), (-0.6, -0.5)], 0.035, DARK, r=0.01, plane="yz"),
+        Cylinder(0.045, 0.06, DARK, axis="x", ch=0.01).at(0, -0.6, -0.47),
+        bolts([(0.04, -0.5, -0.22), (0.04, -0.75, -0.24)], 0.014, axis="x"),
     )
     joints = Union(knuckle(KNEE, DARK, CHROME), housing(ANKLE, DARK).at(*ankle_at),
                    segment((0, -1.9, 0), ankle_at, 0.08, DARK))
@@ -72,8 +73,9 @@ def foot():
     instep = sdf.Paint(instep, Box(1.0, 1.0, 0.04, ORANGE).at(0, 0, 0.24), ORANGE)
     heel = Box(0.05, 0.035, 0.12, DARK, ch=0.02).rot("x", -8).at(0, -0.25, -0.14)
     heel_pad = Box(0.06, 0.015, 0.08, RUBBER, ch=0.006).at(0, -0.29, -0.15)
-    # the heel lever behind the ankle, where the calf ram pulls
-    lug = Union(segment((0, -0.06, -0.06), (0, -0.1, -0.21), 0.025, DARK), Box(0.03, 0.03, 0.03, DARK, ch=0.01).at(0, -0.1, -0.21))
+    # a solid triangular heel plate from the ankle block back to the calf ram's pin
+    lug = Union(Prism([(-0.02, -0.05), (-0.2, -0.1), (-0.12, -0.22)], 0.025, DARK, r=0.006, plane="yz"),
+                Cylinder(0.025, 0.035, DARK, axis="x", ch=0.006).at(0, -0.12, -0.22))
     # authored small, then scaled up round the ankle (the knuckle stays the joint's size)
     big = sdf.Scale(Union(block, instep, heel, heel_pad, lug), k)
     body = Union(knuckle(ANKLE, DARK), big, housing(BALL, DARK).at(*BALL_AT))

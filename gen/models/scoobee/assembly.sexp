@@ -34,11 +34,11 @@
   ; working rams across the joints: the cylinder rides one part, the rod the next, and the
   ; rod slides as the joint turns. Points are in each part's own frame.
   ; knee extensors on the outer front of each thigh, driving horns ahead of the knee axis
-  (ram knee_ram_r (from thigh_r 0.15 -0.24 0.16) (to shin_r 0.2 -0.2 0.27) (r 0.05))
-  (ram knee_ram_l (from thigh_l -0.15 -0.24 0.16) (to shin_l -0.2 -0.2 0.27) (r 0.05))
+  (ram knee_ram_r (from thigh_r 0.33 -0.24 0.16) (to shin_r 0.35 -0.2 0.27) (r 0.05))
+  (ram knee_ram_l (from thigh_l -0.33 -0.24 0.16) (to shin_l -0.35 -0.2 0.27) (r 0.05))
   ; calf rams pulling on heel levers behind the ankles
-  (ram ankle_ram_r (from shin_r 0 -0.95 -0.42) (to foot_r 0 -0.15 -0.32) (r 0.045))
-  (ram ankle_ram_l (from shin_l 0 -0.95 -0.42) (to foot_l 0 -0.15 -0.32) (r 0.045))
+  (ram ankle_ram_r (from shin_r 0 -0.6 -0.47) (to foot_r 0 -0.18 -0.33) (r 0.045))
+  (ram ankle_ram_l (from shin_l 0 -0.6 -0.47) (to foot_l 0 -0.18 -0.33) (r 0.045))
   ; biceps from the upper arm front to a pin on the forearm by the elbow
   (ram elbow_ram_r (from upper_arm_r 0 -0.22 0.19) (to forearm_r 0 -0.22 0.2) (r 0.035))
   (ram elbow_ram_l (from upper_arm_l 0 -0.22 0.19) (to forearm_l 0 -0.22 0.2) (r 0.035)))
