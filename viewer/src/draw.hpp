@@ -27,6 +27,7 @@ struct Gpu {
     int additive_first = 0; // triangles of additive parts sit at the end of the index buffer
     uint32_t fx_program = 0, fx_vao = 0, fx_vbo = 0, fx_atlas = 0;
     uint32_t tiles[3] = {0, 0, 0}; // repeating tile textures (material layers 1-3)
+    uint32_t ground_program = 0;
     float center[3] = {0, 0, 0};
     float radius = 1.0f;
 };

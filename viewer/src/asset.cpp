@@ -38,6 +38,7 @@ bool load_asset(const std::string& obj_path, const std::string& anim_path, Asset
     if (!anim_path.empty()) {
         a.animated = load_anim(anim_path, a.rig, a.anim);
         if (a.animated) {
+            gait_prepare(a.anim, a.rig);
             fx_prepare(a.anim, a.rig);
             std::string bank = bank_path_for(anim_path);
             if (!bank.empty() && fs::exists(bank) && load_sound_bank(bank, clip_dir_for(anim_path), a.sound)) {

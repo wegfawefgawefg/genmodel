@@ -22,6 +22,7 @@ struct Args {
     std::string capture;
     bool sheet = false;     // four standard views in a 2x2 grid
     bool print_shots = false; // print the animation's shot times and fire rate, then exit
+    int dump_bones = 0;     // print every part's matrix at this many times over the loop, then exit
     std::string audio;      // write the soundtrack (from --time, --audio-secs long) to a wav
     float audio_secs = 10;
     int turntable = 0;      // frames to write to a %d pattern, orbiting and animating
@@ -51,6 +52,8 @@ static bool parse_args(int argc, char** argv, Args& a) {
             a.audio = argv[++i];
         } else if (s == "--audio-secs" && has_next) {
             a.audio_secs = (float)atof(argv[++i]);
+        } else if (s == "--dump-bones" && has_next) {
+            a.dump_bones = atoi(argv[++i]);
         } else if (s == "--print-shots") {
             a.print_shots = true;
         } else if (s == "--sheet") {
@@ -322,6 +325,20 @@ int main(int argc, char** argv) {
     Asset asset;
     if (!load_asset(a.obj, a.anim, asset)) {
         return 1;
+    }
+    if (a.dump_bones > 0) {
+        Pose pose;
+        for (int i = 0; i < a.dump_bones; i++) {
+            float t = asset.anim.length * (float)i / (float)a.dump_bones;
+            asset_pose(asset, t, pose);
+            printf("pose %.4f\n", t);
+            for (size_t p = 0; p < asset.rig.parts.size() && p < pose.bones.size(); p++) {
+                printf("bone %s %d", asset.rig.parts[p].name.c_str(), asset.rig.parts[p].parent);
+                for (float m : pose.bones[p].m) printf(" %.5f", m);
+                printf("\n");
+            }
+        }
+        return 0;
     }
     if (a.print_shots) {
         printf("length %.4f\n", asset.anim.length);

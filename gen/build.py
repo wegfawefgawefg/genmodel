@@ -65,8 +65,12 @@ def mesh_pieces(scene, coarse, poly=False):
         others = [bodies[j] for j, o in enumerate(scene.pieces)
                   if j != i and not o.free and not pc.free and not pc.part_each and o.part == pc.part]
         if others and len(f):
-            d, _ = scene.union_eval(v[f].mean(1), others)
-            f = f[d > -pc.h * 0.75]
+            # drop a face only when it is buried entirely (all corners and its centre); big
+            # low-poly faces often poke partly into a neighbour, and must stay
+            pts = np.concatenate([v[f[:, 0]], v[f[:, 1]], v[f[:, 2]], v[f].mean(1)])
+            d, _ = scene.union_eval(pts, others)
+            d = d.reshape(4, -1)
+            f = f[~np.all(d < -pc.h * 0.75, axis=0)]
         if pc.part_each:
             # copies were appended in order, so faces split evenly between them
             copy = np.minimum(f[:, 0] // (len(v) // len(pc.placements)), len(pc.placements) - 1)

@@ -96,10 +96,35 @@ def place(piece, R, t, rename_part):
 MIRROR_X = np.diag([-1.0, 1.0, 1.0]).astype(F)
 
 
-def assemble(assembly_path, make_part, only=None):
+def ram_pieces(name, a, b, r, cyl_mat, rod_mat, from_part, to_part):
+    """A hydraulic ram between rest points a and b: a cylinder from a reaching most of the
+    way, a thinner rod from b reaching back into it, eyes at both pins. Two rig parts."""
+    a, b = np.asarray(a, F), np.asarray(b, F)
+    d = np.linalg.norm(b - a)
+    u = (b - a) / d
+    cyl_end = a + u * d * 0.62
+    rod_end = b - u * d * 0.66
+    cylinder = sdf.Union(
+        sdf.segment(a + u * r * 0.6, cyl_end, r, cyl_mat),
+        sdf.segment(cyl_end - u * r * 0.4, cyl_end, r * 1.12, cyl_mat),
+        sdf.segment(a - u * r * 0.2, a + u * r * 0.7, r * 0.75, cyl_mat),
+    )
+    rod = sdf.Union(
+        sdf.segment(rod_end, b - u * r * 0.5, r * 0.5, rod_mat),
+        sdf.segment(b - u * r * 0.7, b + u * r * 0.2, r * 0.7, cyl_mat),
+    )
+    pieces = [Piece(f"{name}.cyl", cylinder, h=0.012, tris=60, part=f"{name}.cyl"),
+              Piece(f"{name}.rod", rod, h=0.01, tris=40, part=f"{name}.rod")]
+    parts = [Part(f"{name}.cyl", from_part, tuple(float(x) for x in a)),
+             Part(f"{name}.rod", to_part, tuple(float(x) for x in b))]
+    return pieces, parts
+
+
+def assemble(assembly_path, make_part, only=None, ram_mats=(0, 0)):
     """Reads an assembly sexp and places its parts. make_part(model, side) builds a
-    MechPart (side is 1, or -1 for a mirrored copy). Returns (pieces, rig parts). With
-    only = a part name, that part alone in its own frame (for reviewing one part)."""
+    MechPart (side is 1, or -1 for a mirrored copy). Returns (pieces, rig parts, aims). With
+    only = a part name, that part alone in its own frame (for reviewing one part).
+    (ram name (from part x y z) (to part x y z) (r radius)): points in each part's frame."""
     form = parse_sexp(open(assembly_path).read())[0]
     entries = [f for f in form if isinstance(f, list) and f and f[0] == "part"]
     placed = {}
@@ -112,7 +137,8 @@ def assemble(assembly_path, make_part, only=None):
         mp = make_part(model, side)
         if only is not None:
             if name == only:
-                return [place(pc, np.eye(3, dtype=F), np.zeros(3, F), name) for pc in mp.pieces], [Part(name, "", (0, 0, 0))]
+                return ([place(pc, np.eye(3, dtype=F), np.zeros(3, F), name) for pc in mp.pieces],
+                        [Part(name, "", (0, 0, 0))], [])
             placed[name] = (np.eye(3, dtype=F), np.zeros(3, F), mp)
             continue
         if "on" in opts:
@@ -132,7 +158,23 @@ def assemble(assembly_path, make_part, only=None):
         placed[name] = (R, t, mp)
         pieces += [place(pc, R, t, name) for pc in mp.pieces]
         parts.append(Part(name, parent, tuple(float(v) for v in t)))
-    return pieces, parts
+    # rams last: their ends ride parts placed above
+    aims = []
+    for e in (f for f in form if isinstance(f, list) and f and f[0] == "ram"):
+        if only is not None:
+            break
+        opts = {f[0]: f[1:] for f in e[2:] if isinstance(f, list)}
+        ends = []
+        for key in ("from", "to"):
+            part, x, y, z = opts[key][0], *[float(v) for v in opts[key][1:4]]
+            R, t, _ = placed[part]
+            ends.append((part, R @ np.array([x, y, z], F) + t))
+        r = float(opts.get("r", ["0.04"])[0])
+        ps, pts = ram_pieces(e[1], ends[0][1], ends[1][1], r, ram_mats[0], ram_mats[1], ends[0][0], ends[1][0])
+        pieces += ps
+        parts += pts
+        aims.append((pts[0].name, pts[1].name))
+    return pieces, parts, aims
 
 
 def mirrored(part):

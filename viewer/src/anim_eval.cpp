@@ -1,6 +1,7 @@
 // turns an Anim and a time into one matrix per rig part
 #include "anim.hpp"
 #include "anim_util.hpp"
+#include "gait.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -224,6 +225,34 @@ void place_links(const Rig& rig, const RigPath& ph, float feed, std::vector<Mat4
     (void)rig;
 }
 
+// rotation taking unit vector a onto unit vector b (the shortest turn)
+Mat4 turn_onto(Vec3 a, Vec3 b) {
+    Vec3 axis = cross(a, b);
+    float s = len(axis), c = dot(a, b);
+    if (s < 1e-6f) return Mat4{};
+    return rotate(axis * (std::atan2(s, c) / s));
+}
+
+// each ram's cylinder and rod: pinned where their parents carry them, turned to face each other
+void aim_rams(const Rig& rig, std::vector<Mat4>& bones) {
+    for (const RigAim& r : rig.aims) {
+        const RigPart& cp = rig.parts[r.cylinder];
+        const RigPart& rp = rig.parts[r.rod];
+        Mat4 cyl_parent = cp.parent >= 0 ? bones[cp.parent] : Mat4{};
+        Mat4 rod_parent = rp.parent >= 0 ? bones[rp.parent] : Mat4{};
+        Vec3 a = apply_point(cyl_parent, cp.pivot);
+        Vec3 b = apply_point(rod_parent, rp.pivot);
+        Vec3 rest_dir = norm(rp.pivot - cp.pivot);
+        // keep the cylinder's roll from its parent, then swing it onto the new line
+        Mat4 roll = cyl_parent;
+        roll.m[12] = roll.m[13] = roll.m[14] = 0;
+        Mat4 swing = turn_onto(norm(apply_dir(roll, rest_dir)), norm(b - a));
+        Mat4 rot = swing * roll;
+        bones[r.cylinder] = translate(a) * rot * translate(cp.pivot * -1.0f);
+        bones[r.rod] = translate(b) * rot * translate(rp.pivot * -1.0f);
+    }
+}
+
 } // namespace
 
 float ease(const EaseSpec& e, float t) {
@@ -251,6 +280,7 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
         for (int p : tr.parts) {
             if (tr.motion.has_scale) acc[p].scale = tr.motion.scale;
             acc[p].move = acc[p].move + tr.motion.move;
+            acc[p].rot = acc[p].rot + tr.motion.rot_axis * (tr.motion.rot_deg * deg);
             acc[p].glow = acc[p].glow + tr.motion.glow;
         }
     }
@@ -285,6 +315,16 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
         }
     }
 
+    // the gait moves the body and swings the arms before the hierarchy is resolved
+    if (a.gait.on) {
+        std::vector<Vec3> move(rig.parts.size()), rot(rig.parts.size());
+        gait_body(a, t, move, rot);
+        for (size_t i = 0; i < rig.parts.size(); i++) {
+            acc[i].move = acc[i].move + move[i];
+            acc[i].rot = acc[i].rot + rot[i];
+        }
+    }
+
     // parents come before children in the rig file
     out.bones.resize(rig.parts.size());
     out.glow.resize(rig.parts.size());
@@ -296,6 +336,10 @@ void evaluate(const Anim& a, const Rig& rig, float t, Pose& out) {
         out.glow[i] = acc[i].glow;
         out.uv[i] = acc[i].uv;
     }
+    // legs reach their planted feet by IK, overriding what the hierarchy gave them
+    out.ground_on = false;
+    gait_legs(a, rig, t, out);
+    aim_rams(rig, out.bones);
     for (size_t i = 0; i < rig.paths.size(); i++) {
         place_links(rig, rig.paths[i], feed[i], out.bones);
     }

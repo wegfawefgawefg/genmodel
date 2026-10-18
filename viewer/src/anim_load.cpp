@@ -266,6 +266,74 @@ void build_tables(Anim& a) {
     }
 }
 
+// (walk (speed v) (cadence f) ...) into a GaitStyle
+void read_style(gsexp::Node form, GaitStyle& st) {
+    gsexp::FormView f(form);
+    st.speed = f.get_float("speed").value_or(st.speed);
+    st.cadence = f.get_float("cadence").value_or(st.cadence);
+    st.duty = f.get_float("duty").value_or(st.duty);
+    st.lift = f.get_float("lift").value_or(st.lift);
+    st.bob = f.get_float("bob").value_or(st.bob);
+    st.sway = f.get_float("sway").value_or(st.sway);
+    st.lean = f.get_float("lean").value_or(st.lean);
+    st.crouch = f.get_float("crouch").value_or(st.crouch);
+    st.arms = f.get_float("arms").value_or(st.arms);
+    st.elbows = f.get_float("elbows").value_or(st.elbows);
+    st.toe_off = f.get_float("toe-off").value_or(st.toe_off);
+    st.strike = f.get_float("strike").value_or(st.strike);
+    st.twist = f.get_float("twist").value_or(st.twist);
+    st.impact = f.get_float("impact").value_or(st.impact);
+    st.flex = f.get_float("flex").value_or(st.flex);
+    st.shove = f.get_float("shove").value_or(st.shove);
+    st.reach = f.get_float("reach").value_or(st.reach);
+    st.invert = f.get_float("invert").value_or(st.invert);
+}
+
+void read_gait(gsexp::Node form, Gait& g) {
+    g.on = true;
+    for (gsexp::Node c : form.children()) {
+        std::string h = head_of(c);
+        gsexp::FormView f(c);
+        if (h == "body") {
+            g.body_name = std::string(c.child_at(1).text());
+        } else if (h == "hips") {
+            g.hips_name = std::string(c.child_at(1).text());
+        } else if (h == "head") {
+            g.head_name = std::string(c.child_at(1).text());
+        } else if (h == "spring") {
+            g.spring_hz = num(c.child_at(1), g.spring_hz);
+            g.spring_damp = num(c.child_at(2), g.spring_damp);
+        } else if (h == "leg") {
+            GaitLeg l;
+            for (int k = 0; k < 4; k++) {
+                gsexp::Node n = c.child_at(1 + k);
+                if (n.valid() && !n.is_list()) l.names[k] = std::string(n.text());
+            }
+            l.phase = f.get_float("phase").value_or(0);
+            l.toe = f.get_float("toe").value_or(l.toe);
+            l.heel = f.get_float("heel").value_or(l.heel);
+            g.legs.push_back(l);
+        } else if (h == "arm") {
+            GaitArm m;
+            for (int k = 0; k < 2; k++) m.names[k] = std::string(c.child_at(1 + k).text());
+            m.phase = f.get_float("phase").value_or(0);
+            g.arms.push_back(m);
+        } else if (h == "speed") {
+            for (gsexp::Node s : c.children()) {
+                if (head_of(s) == "seg") {
+                    g.speed.push_back({num(s.child_at(1)), num(s.child_at(2)), num(s.child_at(3)), num(s.child_at(4))});
+                }
+            }
+        } else if (h == "walk" || h == "jog" || h == "run" || h == "sprint" || h == "style") {
+            GaitStyle st;
+            read_style(c, st);
+            g.styles.push_back(st);
+        }
+    }
+    std::sort(g.styles.begin(), g.styles.end(), [](const GaitStyle& x, const GaitStyle& y) { return x.speed < y.speed; });
+    if (g.styles.empty()) g.styles.push_back(GaitStyle{});
+}
+
 std::vector<Anim::Seg> read_segs(gsexp::Node form) {
     std::vector<Anim::Seg> segs;
     for (gsexp::Node s : form.children()) {
@@ -302,6 +370,8 @@ bool load_anim(const std::string& path, const Rig& rig, Anim& out) {
             a.length = num(c.child_at(1), 4);
         } else if (h == "curve") {
             continue;
+        } else if (h == "gait") {
+            read_gait(c, a.gait);
         } else if (h == "rate") {
             a.rate = read_segs(c);
         } else if (h == "heat") {

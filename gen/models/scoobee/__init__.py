@@ -40,6 +40,7 @@ SHOULDER = Joint("shoulder", "ball", 0.17)
 ELBOW = Joint("elbow", "hinge", 0.12, 0.1)
 WRIST = Joint("wrist", "hinge", 0.085, 0.07)
 GRIP = Joint("grip", "hinge", 0.05, 0.05)
+BALL = Joint("ball", "hinge", 0.07, 0.1)  # the foot's toe joint
 
 HERE = os.path.dirname(__file__)
 
@@ -49,7 +50,7 @@ def make_part(model, side):
 
     builders = {
         "torso": body.torso, "head": body.head, "pelvis": body.pelvis,
-        "thigh": limbs.thigh, "shin": limbs.shin, "foot": limbs.foot,
+        "thigh": limbs.thigh, "shin": limbs.shin, "foot": limbs.foot, "toes": limbs.toes,
         "upper_arm": limbs.upper_arm, "forearm": limbs.forearm, "claw": limbs.claw, "rifle": limbs.rifle,
     }
     part = builders[model]()
@@ -57,6 +58,6 @@ def make_part(model, side):
 
 
 def build(part=None):
-    pieces, parts = assemble(os.path.join(HERE, "assembly.sexp"), make_part, only=part)
+    pieces, parts, aims = assemble(os.path.join(HERE, "assembly.sexp"), make_part, only=part, ram_mats=(DARK, CHROME))
     return Scene("scoobee" + ("_" + part if part else ""), MATERIALS, pieces, [], texture_size=TEXTURE, scale=1.0,
-                 parts=parts, rust=0.6)
+                 parts=parts, rust=0.6, aims=aims)

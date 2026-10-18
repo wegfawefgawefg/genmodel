@@ -112,6 +112,7 @@ class Scene:
     decals: list = field(default_factory=list)
     parts: list = field(default_factory=list)
     paths: list = field(default_factory=list)
+    aims: list = field(default_factory=list)  # (cylinder part, rod part) pairs that face each other
     texture_size: int = 2048
     scale: float = 1.0    # applied at export
     rust: float = 0.0     # weathering for the whole model, 0..1

@@ -135,6 +135,43 @@ void main() {
 }
 )";
 
+// the ground for walking models: a big quad at y = 0 with a concrete-ish grid that scrolls
+const char* ground_vs = R"(#version 330 core
+uniform mat4 u_view;
+uniform mat4 u_proj;
+uniform float u_size;
+out vec3 v_world;
+void main() {
+    // two triangles: (-1,-1) (1,-1) (-1,1) and (1,-1) (1,1) (-1,1)
+    vec2 c = vec2((gl_VertexID == 1 || gl_VertexID == 3 || gl_VertexID == 4) ? 1.0 : -1.0,
+                  (gl_VertexID == 2 || gl_VertexID == 4 || gl_VertexID == 5) ? 1.0 : -1.0);
+    v_world = vec3(c.x * u_size, 0.0, c.y * u_size);
+    gl_Position = u_proj * u_view * vec4(v_world, 1.0);
+}
+)";
+
+const char* ground_fs = R"(#version 330 core
+in vec3 v_world;
+uniform float u_scroll;
+uniform float u_period;
+uniform float u_size;
+uniform vec3 u_center;
+out vec4 o_color;
+float line(float x, float w) {
+    float f = abs(fract(x) - 0.5);
+    return smoothstep(0.5 - w, 0.5, f);
+}
+void main() {
+    vec2 p = vec2(v_world.x, v_world.z + u_scroll) / u_period;
+    float g = max(line(p.x, 0.02), line(p.y, 0.02));
+    float fine = max(line(p.x * 4.0, 0.03), line(p.y * 4.0, 0.03)) * 0.35;
+    float d = length(v_world.xz - u_center.xz) / u_size;
+    float fade = 1.0 - smoothstep(0.25, 0.95, d);
+    vec3 c = vec3(0.16, 0.16, 0.15) + vec3(0.12) * max(g, fine);
+    o_color = vec4(mix(vec3(0.03, 0.032, 0.036), pow(c, vec3(1.0 / 2.2)), fade), 1.0);
+}
+)";
+
 uint32_t compile(GLenum kind, const char* src) {
     uint32_t s = glCreateShader(kind);
     glShaderSource(s, 1, &src, nullptr);
@@ -228,6 +265,7 @@ bool gpu_init(Gpu& gpu) {
     glGenBuffers(1, &gpu.vbo);
     glGenBuffers(1, &gpu.ibo);
     glGenTextures(1, &gpu.texture);
+    gpu.ground_program = link(ground_vs, ground_fs);
     return fx_init(gpu);
 }
 
@@ -353,6 +391,20 @@ void gpu_draw(const Gpu& gpu, const Camera& cam, const DrawOptions& opt, const P
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, gpu.texture);
     glBindVertexArray(gpu.vao);
+
+    if (pose.ground_on && mode != 3) {
+        glUseProgram(gpu.ground_program);
+        glUniformMatrix4fv(glGetUniformLocation(gpu.ground_program, "u_view"), 1, GL_FALSE, view);
+        glUniformMatrix4fv(glGetUniformLocation(gpu.ground_program, "u_proj"), 1, GL_FALSE, proj);
+        glUniform1f(glGetUniformLocation(gpu.ground_program, "u_size"), gpu.radius * 3.6f);
+        glUniform1f(glGetUniformLocation(gpu.ground_program, "u_scroll"), pose.ground);
+        glUniform1f(glGetUniformLocation(gpu.ground_program, "u_period"), pose.ground_period);
+        glUniform3f(glGetUniformLocation(gpu.ground_program, "u_center"), gpu.center[0], 0, gpu.center[2]);
+        glBindVertexArray(gpu.empty_vao);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glUseProgram(gpu.program);
+        glBindVertexArray(gpu.vao);
+    }
 
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.0f, 1.0f);

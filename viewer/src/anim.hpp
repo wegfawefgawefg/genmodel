@@ -6,6 +6,7 @@
 // throw) or follow a driver continuously (shake, wave, glow). Contributions are summed
 // per part, then turned into one matrix per part for the vertex shader.
 
+#include "gait.hpp"
 #include "rig.hpp"
 #include "vec.hpp"
 
@@ -111,6 +112,7 @@ struct Anim {
     std::vector<float> shots; // times in one loop
     float table_dt = 1.0f / 480.0f;
     std::vector<float> rate_table, heat_table, idle_table;
+    Gait gait; // (gait ...): legged locomotion with IK
 };
 
 bool load_anim(const std::string& path, const Rig& rig, Anim& out);
@@ -135,6 +137,9 @@ struct Pose {
     std::vector<Mat4> bones;
     std::vector<Vec3> glow;
     std::vector<Vec3> uv; // tile texture offsets per part
+    bool ground_on = false; // a gait is running: draw the ground, scrolled by `ground`
+    float ground = 0;
+    float ground_period = 1.5f;
     std::vector<FxSprite> sprites;
     std::vector<FxRibbon> ribbons;
 };

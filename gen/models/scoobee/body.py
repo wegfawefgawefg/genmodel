@@ -9,8 +9,8 @@ from scene import Piece
 from sdf import Box, Cylinder, Loft, Torus, Union, segment
 
 NECK_AT = (0.0, -0.02, 0.86)
-SH_X, SH_Y, SH_Z = 0.72, -0.12, 0.3
-WAIST_AT = (0.0, -0.46, -0.1)
+SH_X, SH_Y, SH_Z = 0.84, -0.12, 0.3
+WAIST_AT = (0.0, -0.6, -0.1)
 
 
 def headlight(x, y, z):
@@ -77,6 +77,8 @@ def torso():
         housing(SHOULDER, DARK).rot("z", 90).at(SH_X, SH_Y, SH_Z),
         housing(SHOULDER, DARK).rot("z", 90).at(-SH_X, SH_Y, SH_Z),
         housing(WAIST, DARK).at(*WAIST_AT),
+        Cylinder(0.13, 0.1, DARK, axis="y", ch=0.03).at(0, WAIST_AT[1] + 0.2, WAIST_AT[2]),
+        Torus(0.13, 0.03, CHROME).at(0, WAIST_AT[1] + 0.14, WAIST_AT[2]),
         drum_stack((SH_X - 0.2, SH_Y, SH_Z), 0.18, 3, 0.07),
         drum_stack((-SH_X + 0.2, SH_Y, SH_Z), 0.18, 3, 0.07),
         segment((0.3, SH_Y, SH_Z), (-0.3, SH_Y, SH_Z), 0.06, DARK),

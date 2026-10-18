@@ -26,9 +26,16 @@ struct RigPath {
     Vec3 across = {1, 0, 0};
 };
 
+// a hydraulic ram across a joint: the cylinder rides one part, the rod the other, and both
+// turn to face each other every frame, so the rod slides in and out as the joint moves
+struct RigAim {
+    int cylinder = -1, rod = -1;
+};
+
 struct Rig {
     std::vector<RigPart> parts;
     std::vector<RigPath> paths;
+    std::vector<RigAim> aims;
 };
 
 // a rig with just a root, for models without a .rig.sexp

@@ -108,6 +108,12 @@ bool load_rig(const std::string& path, Rig& out) {
     for (size_t i = 0; i < rig.paths.size(); i++) {
         rig.paths[i].parent = find_part(rig, path_parents[i]);
     }
+    for (gsexp::Node c : top.children()) {
+        if (head_of(c) == "aim") {
+            RigAim a = {find_part(rig, std::string(c.child_at(1).text())), find_part(rig, std::string(c.child_at(2).text()))};
+            if (a.cylinder >= 0 && a.rod >= 0) rig.aims.push_back(a);
+        }
+    }
     printf("rig %s: %zu parts, %zu paths\n", path.c_str(), rig.parts.size(), rig.paths.size());
     out = std::move(rig);
     return true;
