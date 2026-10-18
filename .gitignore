@@ -1,0 +1,9 @@
+.venv/
+build/
+__pycache__/
+viewer/compile_commands.json
+# reference art belongs to its authors; kept local only
+ref/*.png
+ref/*.jpg
+.vscode/
+out/test/
