@@ -27,7 +27,7 @@
 ; (spring hz damping) is how the body lags its targets
 
 (anim scoobee
-  (length 26.0)
+  (length 31.0)
 
   (gait
     (body torso)
@@ -38,25 +38,32 @@
     (leg thigh_l shin_l foot_l toes_l spur_l (phase 0.5) (heel 0.3))
     (arm upper_arm_r forearm_r (phase 0.5) (steady 1))
     (arm upper_arm_l forearm_l (phase 0))
-    ; stand, walk off, jog, open up into a sprint, wind back down and stop
+    ; stand, walk off, jog, sprint, open right up into an all-out sprint, then wind it all back down
     (speed
       (seg 1.0 3.0 0 1.8)
       (seg 3.0 6.0 1.8 1.8)
       (seg 6.0 7.5 1.8 4.2)
-      (seg 7.5 10.5 4.2 4.2)
-      (seg 10.5 12.0 4.2 8.0)
-      (seg 12.0 15.5 8.0 8.0)
-      (seg 15.5 17.5 8.0 4.2)
-      (seg 17.5 19.0 4.2 4.2)
-      (seg 19.0 20.5 4.2 1.8)
-      (seg 20.5 22.5 1.8 1.8)
-      (seg 22.5 24.5 1.8 0))
+      (seg 7.5 10.0 4.2 4.2)
+      (seg 10.0 11.5 4.2 8.0)
+      (seg 11.5 14.0 8.0 8.0)
+      (seg 14.0 15.8 8.0 12.5)
+      (seg 15.8 20.0 12.5 12.5)
+      (seg 20.0 22.5 12.5 4.2)
+      (seg 22.5 24.0 4.2 4.2)
+      (seg 24.0 25.5 4.2 1.8)
+      (seg 25.5 27.5 1.8 1.8)
+      (seg 27.5 29.5 1.8 0))
     (walk (speed 1.8) (cadence 0.56) (duty 0.62) (lift 0.3) (bob 0.02) (sway 0.08) (lean 2)
           (crouch 0) (arms 5) (elbows 0) (toe-off 22) (strike 10) (twist 9) (impact 0.07) (flex 10) (shove 1.0) (reach 0.05) (invert 2))
     (jog (speed 4.2) (cadence 0.86) (duty 0.4) (lift 0.55) (bob 0.0) (sway 0.04) (lean 5)
          (crouch 0.2) (arms 14) (elbows -12) (toe-off 30) (strike 6) (twist 12) (impact 0.11) (flex 14) (shove 3.0) (reach 0.3) (invert 5))
     (sprint (speed 8.0) (cadence 1.15) (duty 0.28) (lift 0.58) (bob 0.0) (sway 0.02) (lean 9)
-            (crouch 0.22) (arms 22) (elbows -18) (toe-off 38) (strike 2) (twist 15) (impact 0.14) (flex 18) (shove 6.0) (reach 0.6) (invert 9)))
+            (crouch 0.22) (arms 22) (elbows -18) (toe-off 38) (strike 2) (twist 15) (impact 0.14) (flex 18) (shove 6.0) (reach 0.6) (invert 9))
+    ; all out: huge strides, the swing leg thrown far forward and the stance leg driven far back,
+    ; low and leaning hard into it, arms pumping
+    (allout (speed 12.5) (cadence 1.08) (duty 0.27) (lift 0.5) (bob 0.0) (sway 0.02) (lean 7)
+            (crouch 0.38) (arms 26) (elbows -22) (toe-off 48) (strike 0) (twist 20) (impact 0.16) (flex 22)
+            (shove 10.0) (reach 1.0) (invert 10)))
 
   ; and glances about now and then
   (wave head (rot 0 1 0 8) (freq 0.11))

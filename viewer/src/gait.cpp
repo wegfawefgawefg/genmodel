@@ -155,7 +155,7 @@ void gait_prepare(Anim& a, const Rig& rig) {
         GaitStyle st = style_at(g, v);
         // cadence fades in with the first bit of speed, so the first steps are short shuffles
         float f = st.cadence * smooth(0.0f, 0.35f, v);
-        float stride = f > 1e-4f ? std::min(v * st.duty / f, 2.6f) : 0.0f;
+        float stride = f > 1e-4f ? std::min(v * st.duty / f, 4.2f) : 0.0f;
         float moving = smooth(0.0f, 0.7f, v);
         phase += f * g.dt;
         ground += v * g.dt;

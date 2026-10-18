@@ -51,9 +51,9 @@ def cabin():
 def spine():
     """The exposed machinery under the cabin: a frame, rusty tanks, drum stacks, rams, hoses."""
     frame = Union(
-        Box(0.34, 0.2, 0.75, DARK, ch=0.05).at(0, -0.12, 0.05),
+        Box(0.34, 0.16, 0.62, DARK, ch=0.05).at(0, -0.08, -0.06),
         Box(0.5, 0.06, 0.6, DARK, ch=0.02).at(0, 0.06, 0.0),
-        Box(0.2, 0.18, 0.2, DARK, ch=0.04).at(0, -0.06, 0.72),
+        Box(0.2, 0.12, 0.2, DARK, ch=0.04).at(0, 0.02, 0.72),
     )
     tanks = Union(
         Cylinder(0.11, 0.38, RUST, axis="z", ch=0.03).at(0.38, -0.12, -0.25),
@@ -76,7 +76,7 @@ def spine():
 
 def spine_shell():
     """A smooth teardrop belly under the cabin that the sensor pods melt into."""
-    belly = teardrop(0.36, 1.45, TAN).at(0, 0.0, 0.55)
+    belly = teardrop(0.33, 1.45, TAN).at(0, 0.06, 0.55)
     return sdf.Union(belly, Box(0.4, 0.12, 0.5, TAN, ch=0.1).at(0, 0.14, 0.1), k=0.15)
 
 

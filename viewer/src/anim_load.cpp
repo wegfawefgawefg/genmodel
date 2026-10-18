@@ -330,7 +330,7 @@ void read_gait(gsexp::Node form, Gait& g) {
                     g.speed.push_back({num(s.child_at(1)), num(s.child_at(2)), num(s.child_at(3)), num(s.child_at(4))});
                 }
             }
-        } else if (h == "walk" || h == "jog" || h == "run" || h == "sprint" || h == "style") {
+        } else if (h == "walk" || h == "jog" || h == "run" || h == "sprint" || h == "allout" || h == "style") {
             GaitStyle st;
             read_style(c, st);
             g.styles.push_back(st);
