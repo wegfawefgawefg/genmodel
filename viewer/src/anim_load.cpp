@@ -85,6 +85,7 @@ TrackKind kind_named(const std::string& s, bool& ok) {
     if (s == "shake") return TrackKind::shake;
     if (s == "wave") return TrackKind::wave;
     if (s == "glow") return TrackKind::glow;
+    if (s == "lean") return TrackKind::lean;
     ok = false;
     return TrackKind::kick;
 }

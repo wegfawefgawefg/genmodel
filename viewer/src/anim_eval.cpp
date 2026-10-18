@@ -208,6 +208,10 @@ void run_continuous(const Anim& a, const Track& t, float now, std::vector<Acc>& 
             acc[p].glow = acc[p].glow + t.motion.glow * w;
             continue;
         }
+        if (t.kind == TrackKind::lean) {
+            add(acc[p], t.motion, w);
+            continue;
+        }
         if (t.kind == TrackKind::wave) {
             float s = std::sin(2 * 3.14159265f * t.freq * now + p * 1.7f);
             add(acc[p], t.motion, s * w);

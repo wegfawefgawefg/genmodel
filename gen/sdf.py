@@ -528,3 +528,73 @@ class Sweep(Leaf):
     def bounds(self):
         r = max(self.r0, self.r1)
         return self.curve.pts.min(0) - r, self.curve.pts.max(0) + r
+
+
+def curve_coords(curve, p, across):
+    """Points into the curve's space: distance along it (unclamped past the ends), and
+    offsets across it. The across axis leans toward `across`, like Curve.frame_at."""
+    pts, arc = curve.pts, curve.arc
+    best = np.full(len(p), 1e18, F)
+    seg = np.zeros(len(p), np.int32)
+    seg_t = np.zeros(len(p), F)
+    for k in range(len(pts) - 1):
+        a, b = pts[k], pts[k + 1]
+        ab = b - a
+        t = np.clip((p - a) @ ab / (ab @ ab), 0, 1)
+        q = p - a - t[:, None] * ab
+        d = np.sum(q * q, 1)
+        closer = d < best
+        best = np.where(closer, d, best)
+        seg = np.where(closer, k, seg)
+        seg_t = np.where(closer, t, seg_t)
+    a, b = pts[seg], pts[seg + 1]
+    tangent = (b - a) / np.linalg.norm(b - a, axis=1)[:, None]
+    on = a + (b - a) * seg_t[:, None]
+    rel = p - on
+    x = np.asarray(across, F)[None, :] - tangent * (tangent @ np.asarray(across, F))[:, None]
+    x /= np.linalg.norm(x, axis=1)[:, None]
+    z = np.cross(x, tangent)
+    s = arc[seg] + seg_t * (arc[seg + 1] - arc[seg]) + np.sum(rel * tangent, 1)
+    return s, np.sum(rel * x, 1), np.sum(rel * z, 1)
+
+
+class Bend(Node):
+    """Bends a straight shape onto a curve: the child is modelled lying along +x
+    (x = distance along the curve), its y and z become the curve's across and out axes.
+    Sweeps any cross-section (a Prism in the yz plane, a Box, a Cylinder along x), and
+    can taper (scale from s0 to s1 along the curve) and twist (degrees end to end).
+    Keep cross-sections smaller than the bend radius."""
+
+    def __init__(self, child, curve, across=(1, 0, 0), s0=1.0, s1=1.0, twist=0.0):
+        self.child, self.curve, self.across = child, curve, across
+        self.s0, self.s1, self.twist = s0, s1, twist
+
+    def eval(self, p):
+        s, u, v = curve_coords(self.curve, p, self.across)
+        f = np.clip(s / self.curve.length, 0, 1)
+        k = self.s0 + (self.s1 - self.s0) * f
+        ang = np.radians(self.twist) * f
+        c, sn = np.cos(ang), np.sin(ang)
+        q = np.stack([s, (c * u + sn * v) / k, (-sn * u + c * v) / k], 1).astype(F)
+        d, m = self.child.eval(q)
+        return d * np.minimum(k, 1.0), m
+
+    def bounds(self):
+        lo, hi = self.child.bounds()
+        r = float(np.max(np.abs(np.concatenate([lo[1:], hi[1:]])))) * max(self.s0, self.s1) * 1.5
+        return self.curve.pts.min(0) - r, self.curve.pts.max(0) + r
+
+
+def hang(a, b, sag, down=(0, -1, 0)):
+    """Bezier control points for something slung from a to b that sags by `sag` at the
+    middle under gravity (a parabola, near enough to a chain's catenary)."""
+    a, b = np.asarray(a, F), np.asarray(b, F)
+    d = np.asarray(down, F) * (sag * 4.0 / 3.0)
+    return [a, a + (b - a) / 3 + d, a + (b - a) * 2 / 3 + d, b]
+
+
+def channel(width, depth, wall):
+    """U-shaped cross-section opening toward +z, for Prism(..., plane="yz")."""
+    w, t = width * 0.5, wall
+    return [(-w, -depth), (w, -depth), (w, 0.0), (w - t, 0.0), (w - t, -depth + t), (-w + t, -depth + t),
+            (-w + t, 0.0), (-w, 0.0)]

@@ -174,6 +174,8 @@ def core():
     chute = Box(1.0, 0.75, 0.55, GUNMETAL, ch=0.08).rot("z", -12).at(4.6, -1.35, 0.1)
     rear_rail = Box(1.6, 0.4, 0.5, GUNMETAL, ch=0.06).at(7.0, 2.55, -0.05)
     hose = sdf.Sweep(sdf.Curve([(5.2, 1.7, 0.5), (5.6, 2.35, 0.95), (6.4, 1.3, 0.9), (6.9, 1.95, 0.55)]), 0.09, RUBBER)
+    # a power cable slung from the receiver down to the drum, sagging under its weight
+    cable = sdf.Sweep(sdf.Curve(sdf.hang((7.5, -0.2, 0.75), (6.6, -2.4, 1.55), 0.55, down=(0.6, -0.8, 0.3))), 0.07, RUBBER)
     red_clip = Box(0.18, 0.1, 0.1, RED, r=0.03).at(7.6, 2.3, 0.55)
     fittings = Union(
         sdf.Capsule((2.4, -0.9, 0.8), (2.9, -0.5, 0.85), 0.12, TEAL),
@@ -181,7 +183,7 @@ def core():
         Cylinder(0.17, 0.08, TEAL, axis="z", r_edge=0.04).at(2.4, -0.9, 0.86),
         sdf.bolt(0.1, 0.1, STEEL).at(2.4, -0.9, 0.93),
     )
-    body = Union(block, chute, rear_rail, hose, red_clip, fittings)
+    body = Union(block, chute, rear_rail, hose, cable, red_clip, fittings)
     pc = Piece("core", body, h=0.03, tris=2000)
     pc.cut(Box(1.5, 0.02, 1.0, GUNMETAL).at(4.6, 1.05, 0))
     gear_pc = Piece("gear", gear, h=0.02, tris=300, part="gear")
@@ -194,16 +196,18 @@ def core():
     return [pc, gear_pc, teeth, cover_pc, ribs]
 
 
-BELT_PITCH = 0.2
+BELT_PITCH = 0.23
 BELT_START = 0.1
 
 
 def belt_curve():
-    """The belt climbs out of the drum's top, bowing outward under its own weight, into the feed."""
+    """The belt climbs out of the drum's top and bows outward under its own weight into
+    the feed. It bends only across the rounds (in y and z), never along them (x), so the
+    long cartridges fan apart instead of crowding on the inside of a bend."""
     p0 = drum_point(-0.45, DRUM_R - 0.1, 1.0)
-    p3 = np.array([4.15, 1.2, 1.05], np.float32)
-    h1 = p0 + np.array([-0.2, 1.1, 0.75], np.float32)
-    h2 = p3 + np.array([0.45, -1.25, 0.55], np.float32)
+    p3 = np.array([4.0, 1.25, 1.0], np.float32)
+    h1 = p0 + (p3 - p0) * np.float32(1 / 3) + np.array([0, -0.4, 1.6], np.float32)
+    h2 = p0 + (p3 - p0) * np.float32(2 / 3) + np.array([0, -0.4, 1.35], np.float32)
     return [p0, h1, h2, p3]
 
 
@@ -214,15 +218,21 @@ def belt():
         Box(0.72, 0.07, 0.24, STEEL, ch=0.03),
         Box(0.09, 0.09, 0.3, STEEL, ch=0.02).at(-0.45, 0, 0),
         Box(0.09, 0.09, 0.3, STEEL, ch=0.02).at(0.35, 0, 0),
-        Cylinder(0.075, 0.25, BRASS, r_edge=0.03).at(0.95, 0.03, 0),
-        sdf.Cone(0.075, 0.025, 0.1, BRASS).at(1.28, 0.03, 0),
+        # rounds point at the muzzle (-x)
+        Cylinder(0.075, 0.25, BRASS, r_edge=0.03).at(-0.95, 0.03, 0),
+        sdf.Cone(0.025, 0.075, 0.1, BRASS).at(-1.28, 0.03, 0),
     )
     n = int(curve.length / BELT_PITCH)
     spots = [curve.frame_at(BELT_START + i * BELT_PITCH) for i in range(n)]
     links = instanced("belt", link, spots, h=0.012, tris=90, part="belt", part_each=True)
+    # a U channel swept along the belt's top stretch carries it into the feed
+    s0 = curve.length * 0.7
+    run = curve.length - s0 + 0.05
+    chute = Prism(sdf.channel(2.5, 0.42, 0.06), run * 0.5, GUNMETAL, r=0.02, plane="yz").at(s0 + run * 0.5, 0, 0)
+    chute = sdf.Bend(chute.at(0, -0.28, 0.2), curve, across=(1, 0, 0))
     # guide that carries the belt into the feed
-    guide = Box(0.75, 0.3, 0.45, GUNMETAL, ch=0.06).at(4.25, 1.45, 0.85)
-    return [links, Piece("belt_guide", guide, h=0.03, tris=60)]
+    guide = Box(0.75, 0.3, 0.45, GUNMETAL, ch=0.06).at(3.75, 1.5, 0.85)
+    return [links, Piece("belt_guide", Union(guide, chute), h=0.025, tris=420)]
 
 
 def casings():
@@ -286,14 +296,11 @@ def rear_frame():
         Cylinder(0.14, 0.45, BLACK, r_edge=0.03).at(7.55, 3.88, -0.2),
         Cylinder(0.1, 0.04, STEEL, r_edge=0.02).at(8.02, 3.88, -0.2),
     )
-    handle = Union(
-        segment((8.0, 0.1, 0.85), (8.55, -0.45, 1.0), 0.09, TEAL, 0.03),
-        segment((8.55, -0.45, 1.0), (8.3, -1.25, 1.05), 0.09, TEAL, 0.03),
-        segment((8.3, -1.25, 1.05), (7.7, -1.1, 1.05), 0.09, TEAL, 0.03),
-    )
+    # a carry handle bent from one tube, and struts that curve down to the drum
+    handle = tube([(8.0, 0.1, 0.85), (9.0, -0.25, 1.0), (8.7, -1.35, 1.05), (7.7, -1.1, 1.05)], 0.09)
     strut = Union(
-        segment((6.3, 1.5, 0.7), (5.4, -0.2, 0.95), 0.1, TEAL, 0.03),
-        segment((6.7, 1.3, 0.7), (6.2, -0.9, 0.95), 0.08, TEAL, 0.03),
+        tube([(6.3, 1.5, 0.7), (6.0, 0.9, 0.85), (5.4, 0.3, 0.95), (5.4, -0.2, 0.95)], 0.1),
+        tube([(6.7, 1.3, 0.7), (6.75, 0.5, 0.85), (6.2, -0.3, 0.95), (6.2, -0.9, 0.95)], 0.08),
         Box(0.35, 0.5, 0.05, TEAL, r=0.03).rot("z", 25).at(6.15, 0.35, 0.85),
     )
     body = Union(frame, mech, cap, sight, handle, strut)
@@ -301,6 +308,12 @@ def rear_frame():
     for x, yy in ((6.85, 0.2), (8.5, 3.15), (6.4, 3.15), (8.5, 0.35)):
         pc.cut(Torus(0.05, 0.015, STEEL, axis="z").at(x, yy, 0.73))
     return pc
+
+
+def tube(points, r, mat=TEAL):
+    """A round tube bent along a bezier (p0 h1 h2 p3), flat ends."""
+    c = sdf.Curve(points)
+    return sdf.Bend(Cylinder(r, c.length * 0.5, mat, axis="x", r_edge=0.03).at(c.length * 0.5, 0, 0), c, across=(0, 0, 1))
 
 
 def text_image(text, size, color, font="DejaVuSans-Bold.ttf", w=1024, h=256, stretch=1.0):

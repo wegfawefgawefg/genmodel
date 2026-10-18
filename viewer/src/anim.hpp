@@ -40,7 +40,7 @@ struct Motion {
     Vec3 glow;
 };
 
-enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow };
+enum class TrackKind { rest, kick, step, feed, throw_, shake, wave, glow, lean };
 
 struct Track {
     TrackKind kind = TrackKind::kick;
