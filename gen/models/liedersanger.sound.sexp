@@ -14,8 +14,11 @@
 (sounds liedersanger
   (dir "ref/sounds")
 
-  (sample boom (file shot_50bmg.mp3) (cut 0.22 1.2) (fade 0.001 0.5) (highpass 110) (room 0.1))
-  (sample snap (file shot_50bmg.mp3) (cut 0.22 0.4) (fade 0.001 0.12) (highpass 1500))
+  ; the 50BMG recording holds two full reports (a faint click comes before each)
+  (sample boom-a (file shot_50bmg.mp3) (cut 1.585 2.7) (fade 0.001 0.55) (highpass 60) (room 0.08))
+  (sample boom-b (file shot_50bmg.mp3) (cut 8.745 9.86) (fade 0.001 0.55) (highpass 60) (room 0.08))
+  (sample body (file gunshot_shawny4.mp3) (cut 0 0.45) (fade 0.001 0.2) (highpass 120))
+  (sample snap (file sniper_rifle.mp3) (cut 0 0.25) (fade 0.001 0.1) (highpass 1500))
   (sample crack (file heavy_mg_50cal.mp3) (cut 0 0.11) (fade 0.001 0.03) (highpass 250))
   (sample thump (file thump_cannon.mp3) (cut 0 1.1) (fade 0.002 0.4) (lowpass 160))
   (sample clank (file clank1.mp3) (cut 0.09) (fade 0.002 0.05) (highpass 400) (room 0.08))
@@ -27,13 +30,14 @@
   (sample sizzle (synth sizzle) (length 4) (loop))
   (sample hiss (synth hiss) (length 1.6) (fade 0.001 0.3))
 
-  ; one round: the report is the gun (the full-bodied boom, its crack and a thump for
-  ; punch); the feed's clank and the action sit well under it
+  ; one round: the report is the gun (a 50BMG report, a rifle's body and snap, the MG's
+  ; crack, a little thump); the feed's clank and the action sit well under it
   (cue shot
-    (layer boom (gain 1.0 1.15) (pitch 0.95 1.03))
-    (layer crack (gain 0.6 0.7) (pitch 0.9 0.98))
-    (layer snap (gain 0.28 0.34) (pitch 0.97 1.05))
-    (layer thump (gain 0.26) (pitch 0.95 1.05) (pan 0))
+    (layer (pick boom-a boom-b) (gain 0.9 1.0) (pitch 0.94 1.02))
+    (layer body (gain 0.3 0.38) (pitch 0.92 1.0))
+    (layer snap (gain 0.22 0.28) (pitch 0.97 1.05))
+    (layer crack (gain 0.25 0.3) (pitch 0.9 0.98))
+    (layer thump (gain 0.18) (pitch 0.95 1.05) (pan 0))
     (layer clank (gain 0.1 0.14) (pitch 0.95 1.1) (delay 0.045 0.055) (pan 0.1))
     (layer cycle (gain 0.04 0.06) (pitch 0.95 1.1) (delay 0.07 0.08) (pan 0.1)))
 
@@ -50,6 +54,6 @@
   (cue whine
     (layer whine (gain 0.04)))
   (cue whirr
-    (layer whirr (gain 0.07)))
+    (layer whirr (gain 0.09)))
   (cue sizzle
     (layer sizzle (gain 0.09))))

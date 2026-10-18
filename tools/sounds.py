@@ -100,13 +100,26 @@ def synth(kind, length, rng):
     """Made-up sounds: a geared motor whirr, smoke sizzle, a pneumatic hiss."""
     t = np.arange(int(length * SR)) / SR
     if kind == "whirr":
-        # a motor's buzz (harmonics of 110 Hz) chopped by gear teeth at 24 Hz, with
-        # bearing rumble; whole cycles in the clip so it loops cleanly
-        tone = sum(np.sin(2 * np.pi * 110 * h * t + h) / h ** 1.3 for h in range(1, 14))
-        teeth = 0.65 + 0.35 * np.sin(2 * np.pi * 24 * t) ** 8
-        rumble = signal.lfilter(*signal.butter(2, 400 / (SR / 2)), rng.standard_normal(len(t)))
-        whine = 0.25 * np.sin(2 * np.pi * 880 * t) * (0.8 + 0.2 * np.sin(2 * np.pi * 3 * t))
-        return tone * teeth + rumble * 3 + whine
+        # a gear train: every tooth meshing is a small metallic ping (with a fixed pattern of
+        # uneven teeth, like real gears), over the mesh tone and a faint motor hum. At low
+        # playback speed the teeth tick apart, at speed they run together into a grind.
+        mesh = 90.0  # teeth per second at full speed; whole teeth per clip so it loops
+        n = len(t)
+        ping_t = np.arange(int(0.012 * SR)) / SR
+        ping = sum(a * np.sin(2 * np.pi * f * ping_t) for a, f in ((1.0, 2300), (0.7, 3700), (0.5, 1150)))
+        ping *= np.exp(-ping_t / 0.004)
+        clicks = np.zeros(n)
+        teeth = int(length * mesh)
+        uneven = rng.uniform(0.6, 1.0, 18)  # an 18-tooth gear's wear, repeating
+        for k in range(teeth):
+            i = int(k / mesh * SR)
+            if i < n:
+                clicks[i] += uneven[k % 18]
+        out = signal.fftconvolve(clicks, ping)[:n]
+        out += 0.18 * np.sin(2 * np.pi * mesh * t) + 0.1 * np.sin(2 * np.pi * mesh * 2 * t + 1)
+        out += 0.08 * np.sin(2 * np.pi * mesh * 5 * t) * (0.7 + 0.3 * np.sin(2 * np.pi * mesh / 18 * t))
+        out += 0.12 * np.sin(2 * np.pi * 50 * t)
+        return out
     noise = rng.standard_normal(len(t))
     if kind == "sizzle":
         # bright hiss that flutters, with sparse crackle pops
@@ -151,7 +164,8 @@ def prepare(form, src_dir):
         if n_out and n_out < len(x):
             x[-n_out:] *= np.linspace(1, 0, n_out) ** 2
     x /= max(np.abs(x).max(), 1e-9)
-    if field(form, "room"):
+    # a tail would break a loop's seam
+    if field(form, "room") and field(form, "loop") is None:
         x = room(x, float(field(form, "room")[0]))
         x /= max(np.abs(x).max(), 1e-9)
     x *= float(field(form, "gain", ["1"])[0])

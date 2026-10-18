@@ -41,6 +41,11 @@
     (seg 2.7 6.2 1 1)
     (seg 6.2 8.4 1 0 expo-out))
 
+  ; the barrels sizzle briefly once the burst ends
+  (curve sizzle
+    (seg 6.05 6.3 0 1 smooth)
+    (seg 6.3 7.6 1 0 expo-out))
+
   ; flashes and spent cases stay hidden until something calls for them
   (rest upper_barrel_flash lower_barrel_flash (scale 0))
   (rest case.* (scale 0))
@@ -145,4 +150,4 @@
   (sound settle (at 6.15))
   (hum whine (by rate 0.125) (pitch 0.55 1.3))
   (hum whirr (by spin 1) (pitch 0.3 1.15))
-  (hum sizzle (by smoulder 2.5 smooth) (pitch 0.95 1.05)))
+  (hum sizzle (by sizzle 1) (pitch 0.95 1.05)))
