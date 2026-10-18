@@ -25,12 +25,92 @@ F = np.float32
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+REDUCE = 0.0  # --reduce mm: drop hidden faces, then simplify within this distance of the true surface
+
+
+def surface_samples(v, f, spacing):
+    """Points spread over the triangles about `spacing` apart, plus the vertices."""
+    a, b, c = v[f[:, 0]], v[f[:, 1]], v[f[:, 2]]
+    area = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    n = np.maximum(1, (area / (spacing * spacing)).astype(int))
+    idx = np.repeat(np.arange(len(f)), n)
+    rng = np.random.default_rng(5)
+    r1, r2 = rng.random(len(idx)), rng.random(len(idx))
+    flip = r1 + r2 > 1
+    r1[flip], r2[flip] = 1 - r1[flip], 1 - r2[flip]
+    return np.concatenate([a[idx] + (b[idx] - a[idx]) * r1[:, None] + (c[idx] - a[idx]) * r2[:, None], v[np.unique(f)]])
+
+
+def surface_gap(v0, f0, v1, f1, spacing):
+    """Two-way distance between two surfaces (sampled): the worst a point on either is from
+    the other. Small means they look the same from any side."""
+    from scipy.spatial import cKDTree
+    s0, s1 = surface_samples(v0, f0, spacing), surface_samples(v1, f1, spacing)
+    return max(cKDTree(s1).query(s0)[0].max(), cKDTree(s0).query(s1)[0].max())
+
+
+def leaf_nodes(node, wrap=lambda n: n):
+    """A union tree flattened into its leaf primitives, each wrapped in its transforms."""
+    if isinstance(node, sdf.Union):
+        return [x for c in node.children for x in leaf_nodes(c, wrap)]
+    if isinstance(node, sdf.Xform):
+        return leaf_nodes(node.child, lambda n, R=node.R, t=node.t: wrap(sdf.Xform(n, R, t)))
+    if isinstance(node, sdf.Scale):
+        return leaf_nodes(node.child, lambda n, k=node.k: wrap(sdf.Scale(n, k)))
+    if isinstance(node, sdf.Paint):
+        return leaf_nodes(node.base, wrap)
+    if isinstance(node, sdf.Repeat):
+        return [x for i in range(node.count) for x in leaf_nodes(node.child, lambda n, o=node.step * i: wrap(n.at(*o)))]
+    return [wrap(node)]
+
+
+def reduce_mesh(node, tol):
+    """Same look, fewer triangles. Each primitive is meshed on its own and its faces that are
+    sealed inside the other primitives (every corner and the centre) are dropped: invisible,
+    so free. Then edges collapse only while the result stays within tol of that surface,
+    measured both ways; the texture is baked from the SDF anyway."""
+    leaves = leaf_nodes(node)
+    meshes = [polys.polygonize(n) for n in leaves]
+    if any(m is None for m in meshes):
+        return None
+    vs, fs, base = [], [], 0
+    for i, (v, f) in enumerate(meshes):
+        if len(leaves) > 1:
+            others = sdf.Union(*[n for j, n in enumerate(leaves) if j != i])
+            pts = np.concatenate([v[f[:, 0]], v[f[:, 1]], v[f[:, 2]], v[f].mean(1)]).astype(F)
+            d = others.dist(pts).reshape(4, -1)
+            f = f[~np.all(d < -0.002, axis=0)]
+        vs.append(v)
+        fs.append(f + base)
+        base += len(v)
+    v, f = meshing.weld(np.concatenate(vs).astype(F), np.concatenate(fs), 1e-5)
+    if len(f) < 8 or tol <= 0:
+        return v, f
+    best_v, best_f = v, f
+    spacing = max(tol * 0.5, 0.002)
+    target = len(f)
+    for _ in range(14):
+        target = int(target * 0.85)
+        if target < 8:
+            break
+        vv, ff = meshing.decimate(v, f, target, aggressiveness=5)
+        ff = meshing.drop_degenerate(vv, ff)
+        if len(ff) == 0 or surface_gap(v, f, vv, ff, spacing) > tol:
+            break
+        best_v, best_f = vv, ff
+    return best_v, best_f
+
+
 def mesh_element(node, pc, coarse, poly):
     """(verts, faces) for one node: clean polygons when asked and possible, else contoured
     and decimated to the piece's budget."""
     if poly and pc.mesher != "contour":
         m = polys.polygonize(node)
         if m is not None:
+            if REDUCE > 0:
+                r = reduce_mesh(node, REDUCE)
+                if r is not None:
+                    return r
             return m
         print(f"  {pc.name}: no polygon form (a cut?), contouring instead")
     lo, hi = node.bounds()
@@ -122,9 +202,13 @@ def main():
     ap.add_argument("--fast", action="store_true", help="coarser voxels and a small texture")
     ap.add_argument("--style", default=None, help="a gen/styles/<name>.sexp to build in")
     ap.add_argument("--part", default=None, help="mechs: build one part alone, in its own frame")
+    ap.add_argument("--reduce", type=float, default=0.0,
+                    help="same look, fewer tris: drop hidden faces and simplify within this many mm")
     args = ap.parse_args()
 
     t0 = time.time()
+    global REDUCE
+    REDUCE = args.reduce / 1000.0  # metres in the export, converted to model units below
     mod = importlib.import_module("models." + args.model)
     build_args = {"part": args.part} if args.part else {}
     # a model made for a style (STYLE = "lofi") builds in it unless told otherwise
@@ -134,6 +218,7 @@ def main():
     # facets must be set before the model builds its primitives
     sdf.FACETS = style.get("facets", 0)
     scene = mod.build(**build_args)
+    REDUCE = REDUCE / scene.scale
     scene.style = style
     # a model can insist on its texture size (TEXTURE), e.g. a whole mech needs more texels
     size = args.tex or getattr(mod, "TEXTURE", None) or (1024 if args.fast else style.get("texture", scene.texture_size))
@@ -146,6 +231,7 @@ def main():
             m.color = style["palette"][m.name]
     out_name = args.model + ("-" + style_name if style_name and style_name != native else "")
     out_name += ("_" + args.part) if args.part else ""
+    out_name += "-reduced" if args.reduce > 0 else ""
 
     print("meshing")
     v, f, face_part, face_piece, face_tile, face_tile_uv = mesh_pieces(scene, coarse, style.get("mesher") == "poly")
