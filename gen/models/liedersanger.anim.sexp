@@ -26,19 +26,18 @@
 (anim liedersanger
   (length 9.0)
 
-  ; a heavy gun: a slow double-exponential wind-up to 8 rounds a second, a long burst,
-  ; and a wind-down where the last few shots come apart
+  ; a heavy gun, trigger pulled at 1.05: the first round goes about 0.3 s later at
+  ; 5 rounds a second, climbing fast to 8; the wind-down lets the last shots come apart
   (rate
-    (seg 1.2 2.6 0 8 superexp)
-    (seg 2.6 6.0 8 8)
+    (seg 1.2 1.7 5 8 expo-out)
+    (seg 1.7 6.0 8 8)
     (seg 6.0 7.0 8 0 expo-out))
   (heat (gain 0.07) (cool 1.9))
 
-  ; the motor winds up ahead of the first shot and spins down after the last
+  ; the motor snaps up to speed with the trigger and spins down after the last shot
   (curve spin
-    (seg 0.3 1.3 0 0.7 expo-in)
-    (seg 1.3 2.7 0.7 1 smooth)
-    (seg 2.7 6.2 1 1)
+    (seg 1.05 1.35 0 1 expo-out)
+    (seg 1.35 6.2 1 1)
     (seg 6.2 8.4 1 0 expo-out))
 
   ; the barrels sizzle briefly once the burst ends
@@ -50,8 +49,8 @@
   (rest upper_barrel_flash lower_barrel_flash (scale 0))
   (rest case.* (scale 0))
 
-  ; the gunner braces before the burst, then eases off as it ends
-  (kick root (at 0.6) (move 0.02 -0.015 0) (rot 0 0 1 1.8) (attack 0.55 expo-inout) (release 6.0 smooth))
+  ; the gunner braces as the trigger goes, then eases off as the burst ends
+  (kick root (at 1.05) (move 0.02 -0.015 0) (rot 0 0 1 1.8) (attack 0.15 expo-out) (release 5.6 smooth))
 
   ; the barrels take turns: even shots fire the top one. Each slams back a long way
   ; and comes home on a soft spring, overshooting forward once.
