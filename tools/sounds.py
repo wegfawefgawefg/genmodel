@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import wave
+import zlib
 
 import numpy as np
 from scipy import signal
@@ -85,9 +86,53 @@ def room(x, amount):
     return out[: keep[-1] + 1] if len(keep) else out
 
 
+def seamless(x, fade):
+    """Crossfades the end into the start so the clip loops without a click."""
+    n = int(fade * SR)
+    head, tail = x[:n].copy(), x[-n:]
+    ramp = np.linspace(0, 1, n)
+    x = x[: len(x) - n].copy()
+    x[:n] = head * ramp + tail * (1 - ramp)
+    return x
+
+
+def synth(kind, length, rng):
+    """Made-up sounds: a geared motor whirr, smoke sizzle, a pneumatic hiss."""
+    t = np.arange(int(length * SR)) / SR
+    if kind == "whirr":
+        # a motor's buzz (harmonics of 110 Hz) chopped by gear teeth at 24 Hz, with
+        # bearing rumble; whole cycles in the clip so it loops cleanly
+        tone = sum(np.sin(2 * np.pi * 110 * h * t + h) / h ** 1.3 for h in range(1, 14))
+        teeth = 0.65 + 0.35 * np.sin(2 * np.pi * 24 * t) ** 8
+        rumble = signal.lfilter(*signal.butter(2, 400 / (SR / 2)), rng.standard_normal(len(t)))
+        whine = 0.25 * np.sin(2 * np.pi * 880 * t) * (0.8 + 0.2 * np.sin(2 * np.pi * 3 * t))
+        return tone * teeth + rumble * 3 + whine
+    noise = rng.standard_normal(len(t))
+    if kind == "sizzle":
+        # bright hiss that flutters, with sparse crackle pops
+        hiss = signal.lfilter(*signal.butter(2, [2500 / (SR / 2), 9000 / (SR / 2)], "band"), noise)
+        flutter = 0.6 + 0.4 * signal.lfilter(*signal.butter(1, 6 / (SR / 2)), rng.standard_normal(len(t))) * 20
+        pops = (rng.random(len(t)) < 40 / SR) * rng.uniform(0.5, 1.5, len(t))
+        crackle = signal.lfilter(*signal.butter(2, 1800 / (SR / 2), "high"), pops)
+        crackle = signal.lfilter([1.0], [1, -0.93], crackle)
+        return hiss * np.clip(flutter, 0.1, 1.5) + crackle * 1.5
+    if kind == "hiss":
+        # a vent letting go: loud at once, thinning as it dies
+        band = signal.lfilter(*signal.butter(2, [900 / (SR / 2), 7000 / (SR / 2)], "band"), noise)
+        return band * np.exp(-t * 2.2) * (1 - np.exp(-t * 200))
+    raise ValueError("unknown synth " + kind)
+
+
 def prepare(form, src_dir):
     name = form[1]
-    x = decode(os.path.join(src_dir, field(form, "file")[0]))
+    rng = np.random.default_rng(zlib.crc32(name.encode()))
+    if field(form, "synth"):
+        length = float(field(form, "length", ["2"])[0])
+        x = synth(field(form, "synth")[0], length + (0.1 if field(form, "loop") is not None else 0), rng)
+        if field(form, "loop") is not None:
+            x = seamless(x, 0.1)
+    else:
+        x = decode(os.path.join(src_dir, field(form, "file")[0]))
     cut = field(form, "cut", [])
     start = float(cut[0]) if cut else 0.0
     end = float(cut[1]) if len(cut) > 1 else None

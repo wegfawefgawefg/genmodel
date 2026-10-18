@@ -21,11 +21,12 @@ struct EaseSpec {
     float w = 0.0f;
 };
 
-// smoulder = heat * idle: hot but no longer firing
-enum class Driver { one, rate, heat, idle, smoulder };
+// smoulder = heat * idle: hot but no longer firing; curve = a named (curve ...) of the anim
+enum class Driver { one, rate, heat, idle, smoulder, curve };
 
 struct Drive {
     Driver driver = Driver::one;
+    int curve = -1;
     float k = 1.0f;
     bool eased = false;
     EaseSpec ease;
@@ -97,6 +98,13 @@ struct Anim {
         EaseSpec ease;
     };
     std::vector<Seg> rate;
+    // named curves any track can be driven by: (curve spin (seg t0 t1 from to ease)...)
+    struct NamedCurve {
+        std::string name;
+        std::vector<Seg> segs;
+        std::vector<float> table;
+    };
+    std::vector<NamedCurve> curves;
     float heat_gain = 0.04f, heat_cool = 1.5f;
     // tables built at load
     std::vector<float> shots; // times in one loop

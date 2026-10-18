@@ -19,7 +19,8 @@
 ;   a smoke ribbon trailing off the point; each parcel keeps the meander of when it left
 ; (sound cue (pan p) (gain g) [(at secs)])  plays a cue from liedersanger.sound.sexp on shots
 ; (hum cue (by driver k) (pitch lo hi) (gain g))  a looping cue whose level and pitch follow
-; drivers: rate (shots/s), heat, idle (1 when not firing), smoulder (heat * idle: hot, settled)
+; drivers: rate (shots/s), heat, idle (1 when not firing), smoulder (heat * idle: hot, settled),
+;   or any (curve name (seg t0 t1 from to ease)...) defined here
 ; eases: linear smooth expo-in expo-out expo-inout superexp back spring, or (mix a b w)
 
 (anim liedersanger
@@ -32,6 +33,13 @@
     (seg 2.6 6.0 8 8)
     (seg 6.0 7.0 8 0 expo-out))
   (heat (gain 0.07) (cool 1.9))
+
+  ; the motor winds up ahead of the first shot and spins down after the last
+  (curve spin
+    (seg 0.3 1.3 0 0.7 expo-in)
+    (seg 1.3 2.7 0.7 1 smooth)
+    (seg 2.7 6.2 1 1)
+    (seg 6.2 8.4 1 0 expo-out))
 
   ; flashes and spent cases stay hidden until something calls for them
   (rest upper_barrel_flash lower_barrel_flash (scale 0))
@@ -131,9 +139,12 @@
     (curl 0.022 0.15) (wind 0.06 0 -0.02) (size 0.03 0.26 1.2) (color 0.74 0.76 0.8 0.24))
 
   ; sound: every shot, panned toward the barrel that fired; cases land on their own cue;
-  ; the motor whine climbs with the fire rate; the settle gets its own thud
+  ; the gear whine climbs with the fire rate, the motor whirrs up on its spin curve,
+  ; the barrels sizzle while they smoulder; the settle vents
   (on-shot (every 2 0) (sound shot (pan -0.3)))
   (on-shot (every 2 1) (sound shot (pan 0.3)))
   (on-shot (sound case))
   (sound settle (at 7.0))
-  (hum whine (by rate 0.125) (pitch 0.55 1.3)))
+  (hum whine (by rate 0.125) (pitch 0.55 1.3))
+  (hum whirr (by spin 1) (pitch 0.3 1.15))
+  (hum sizzle (by smoulder 2.5 smooth) (pitch 0.95 1.05)))

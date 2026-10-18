@@ -32,7 +32,13 @@ EaseSpec read_ease(gsexp::Node n) {
     return e;
 }
 
-Driver driver_named(const std::string& s) {
+Driver driver_named(const std::string& s, const Anim& a, int& curve) {
+    for (size_t i = 0; i < a.curves.size(); i++) {
+        if (a.curves[i].name == s) {
+            curve = (int)i;
+            return Driver::curve;
+        }
+    }
     if (s == "rate") return Driver::rate;
     if (s == "heat") return Driver::heat;
     if (s == "idle") return Driver::idle;
@@ -97,7 +103,7 @@ TrackKind kind_named(const std::string& s, bool& ok) {
 }
 
 // (kick part... (field ...)...): bare atoms after the head are targets
-bool read_track(gsexp::Node form, const Rig& rig, int every, int offset, Track& t) {
+bool read_track(gsexp::Node form, const Rig& rig, const Anim& a, int every, int offset, Track& t) {
     bool ok;
     t.kind = kind_named(head_of(form), ok);
     if (!ok) {
@@ -200,7 +206,7 @@ bool read_track(gsexp::Node form, const Rig& rig, int every, int offset, Track& 
             t.freq = num(c.child_at(1), 1);
         } else if (h == "by") {
             // (by driver k [ease])
-            t.by.driver = driver_named(std::string(c.child_at(1).text()));
+            t.by.driver = driver_named(std::string(c.child_at(1).text()), a, t.by.curve);
             t.by.k = num(c.child_at(2), 1);
             if (c.child_count() > 3) {
                 t.by.eased = true;
@@ -211,8 +217,8 @@ bool read_track(gsexp::Node form, const Rig& rig, int every, int offset, Track& 
     return true;
 }
 
-float rate_at(const Anim& a, float t) {
-    for (const Anim::Seg& s : a.rate) {
+float segs_at(const std::vector<Anim::Seg>& segs, float t) {
+    for (const Anim::Seg& s : segs) {
         if (t >= s.t0 && t < s.t1) {
             float u = (t - s.t0) / std::max(s.t1 - s.t0, 1e-6f);
             return s.v0 + (s.v1 - s.v0) * ease(s.ease, u);
@@ -228,12 +234,18 @@ void build_tables(Anim& a) {
     a.heat_table.assign(n, 0);
     a.idle_table.assign(n, 1);
     a.shots.clear();
+    for (Anim::NamedCurve& c : a.curves) {
+        c.table.resize(n);
+        for (int i = 0; i < n; i++) {
+            c.table[i] = segs_at(c.segs, i * a.table_dt);
+        }
+    }
     float phase = 0, heat = 0, idle = 1;
     // two passes so heat and idle carry over the loop seam
     for (int pass = 0; pass < 2; pass++) {
         for (int i = 0; i < n; i++) {
             float t = i * a.table_dt;
-            float r = rate_at(a, t);
+            float r = segs_at(a.rate, t);
             heat += (a.heat_gain * r - heat / a.heat_cool) * a.table_dt;
             float want_idle = 1.0f - std::min(r / 4.0f, 1.0f);
             idle += (want_idle - idle) * std::min(a.table_dt / 0.6f, 1.0f);
@@ -252,6 +264,17 @@ void build_tables(Anim& a) {
     }
 }
 
+std::vector<Anim::Seg> read_segs(gsexp::Node form) {
+    std::vector<Anim::Seg> segs;
+    for (gsexp::Node s : form.children()) {
+        if (head_of(s) != "seg") continue;
+        Anim::Seg seg = {num(s.child_at(1)), num(s.child_at(2)), num(s.child_at(3)), num(s.child_at(4)), {}};
+        if (s.child_count() > 5) seg.ease = read_ease(s.child_at(5));
+        segs.push_back(seg);
+    }
+    return segs;
+}
+
 } // namespace
 
 bool load_anim(const std::string& path, const Rig& rig, Anim& out) {
@@ -265,17 +288,20 @@ bool load_anim(const std::string& path, const Rig& rig, Anim& out) {
         return false;
     }
     Anim a;
+    // named curves first, so tracks can be driven by them
+    for (gsexp::Node c : r.root(0).children()) {
+        if (head_of(c) == "curve") {
+            a.curves.push_back({std::string(c.child_at(1).text()), read_segs(c), {}});
+        }
+    }
     for (gsexp::Node c : r.root(0).children()) {
         std::string h = head_of(c);
         if (h == "length") {
             a.length = num(c.child_at(1), 4);
+        } else if (h == "curve") {
+            continue;
         } else if (h == "rate") {
-            for (gsexp::Node s : c.children()) {
-                if (head_of(s) != "seg") continue;
-                Anim::Seg seg = {num(s.child_at(1)), num(s.child_at(2)), num(s.child_at(3)), num(s.child_at(4)), {}};
-                if (s.child_count() > 5) seg.ease = read_ease(s.child_at(5));
-                a.rate.push_back(seg);
-            }
+            a.rate = read_segs(c);
         } else if (h == "heat") {
             gsexp::FormView f(c);
             a.heat_gain = f.get_float("gain").value_or(a.heat_gain);
@@ -291,13 +317,13 @@ bool load_anim(const std::string& path, const Rig& rig, Anim& out) {
             }
             for (gsexp::Node s : c.children()) {
                 Track t;
-                if (s.is_list() && head_of(s) != "every" && read_track(s, rig, every, offset, t)) {
+                if (s.is_list() && head_of(s) != "every" && read_track(s, rig, a, every, offset, t)) {
                     a.tracks.push_back(t);
                 }
             }
         } else if (c.is_list()) {
             Track t;
-            if (read_track(c, rig, 1, 0, t)) {
+            if (read_track(c, rig, a, 1, 0, t)) {
                 a.tracks.push_back(t);
             }
         }
