@@ -327,6 +327,26 @@ def lathe_mesh(profile, n):
     return orient_outward(np.array(verts, F), np.array(tris, np.int32))
 
 
+def loft_mesh(stations, section):
+    """Rings of the section at each station joined by quads, both ends capped."""
+    sec = ccw(section)
+    n = len(sec)
+    verts = []
+    for y, w, d, dz in stations:
+        verts += [(u * w, y, v * d + dz) for u, v in sec]
+    tris = []
+    for r in range(len(stations) - 1):
+        a0, b0 = r * n, (r + 1) * n
+        for i in range(n):
+            j = (i + 1) % n
+            tris += [(a0 + i, b0 + j, a0 + j), (a0 + i, b0 + i, b0 + j)]
+    caps = ear_clip([(u, v) for u, v in sec])
+    last = (len(stations) - 1) * n
+    tris += [(a, b, c) for a, b, c in caps]
+    tris += [(last + c, last + b, last + a) for a, b, c in caps]
+    return orient_outward(np.array(verts, F), np.array(tris, np.int32))
+
+
 def polygonize(node):
     """(verts, faces) for a tree of supported nodes, or None."""
     n = sides()
@@ -350,6 +370,8 @@ def polygonize(node):
                 lon = 2 * math.pi * k / n
                 pts.append((node.r * math.cos(lat) * math.cos(lon), node.r * math.sin(lat), node.r * math.cos(lat) * math.sin(lon)))
         return hull(pts)
+    if isinstance(node, sdf.Loft):
+        return loft_mesh(node.st, node.sec)
     if isinstance(node, sdf.Lathe):
         return lathe_mesh(node.profile, node.sides or max(n, 12))
     if isinstance(node, sdf.Torus):
@@ -370,6 +392,9 @@ def polygonize(node):
         if np.linalg.det(node.R) < 0:
             f = f[:, ::-1].copy()
         return (v @ node.R.T + node.t).astype(F), f
+    if isinstance(node, sdf.Scale):
+        m = polygonize(node.child)
+        return None if m is None else ((m[0] * node.k).astype(F), m[1])
     if isinstance(node, (sdf.Paint, sdf.Round)):
         return polygonize(node.base if isinstance(node, sdf.Paint) else node.child)
     if isinstance(node, sdf.Union):

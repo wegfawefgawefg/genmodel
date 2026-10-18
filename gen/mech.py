@@ -125,6 +125,10 @@ def assemble(assembly_path, make_part, only=None):
             R, t = np.eye(3, dtype=F), np.zeros(3, F)
             if "at" in opts:
                 t = np.array([float(v) for v in opts["at"]], F)
+        # the rest pose: (turn axis deg ...) turns the part about its own joint
+        turn = opts.get("turn", [])
+        for k in range(0, len(turn) - 1, 2):
+            R = (R @ sdf.rotation(turn[k], float(turn[k + 1]))).astype(F)
         placed[name] = (R, t, mp)
         pieces += [place(pc, R, t, name) for pc in mp.pieces]
         parts.append(Part(name, parent, tuple(float(v) for v in t)))

@@ -637,3 +637,50 @@ class Lathe(Leaf):
         r = max(r for r, _ in self.profile) / (math.cos(math.pi / self.sides) if self.sides else 1)
         ys = [y for _, y in self.profile]
         return np.array([-r, min(ys), -r], F), np.array([r, max(ys), r], F)
+
+
+# a car-body cross-section: flat sides, a tucked-in crowned top, chamfered creases (x, z)
+BODY_SECTION = [(1.0, 0.15), (0.9, 0.7), (0.55, 1.0), (-0.55, 1.0), (-0.9, 0.7), (-1.0, 0.15),
+                (-0.92, -0.6), (-0.55, -1.0), (0.55, -1.0), (0.92, -0.6)]
+
+
+class Loft(Leaf):
+    """A shell lofted along y through stations [(y, half_width, half_depth, z_shift), ...]
+    listed top to bottom, every station the same cross-section (unit polygon in x, z) scaled
+    and shifted. Flat panels and crisp creases, the way car bodies are, instead of a lathe's
+    roundness."""
+
+    def __init__(self, stations, mat, section=None):
+        self.st = np.array([s if len(s) == 4 else (*s, 0.0) for s in stations], F)
+        self.sec = np.asarray(section if section is not None else BODY_SECTION, F)
+        self.mat = mat
+
+    def sd(self, p):
+        ys = self.st[::-1, 0]  # ascending for interp
+        w = np.interp(p[:, 1], ys, self.st[::-1, 1])
+        d = np.interp(p[:, 1], ys, self.st[::-1, 2])
+        dz = np.interp(p[:, 1], ys, self.st[::-1, 3])
+        q = np.stack([p[:, 0] / w, (p[:, 2] - dz) / d], 1).astype(F)
+        d2 = sd_polygon(q, self.sec) * np.minimum(w, d)
+        dy = np.maximum(p[:, 1] - self.st[0, 0], self.st[-1, 0] - p[:, 1])
+        return np.maximum(d2, dy)
+
+    def bounds(self):
+        w, d = self.st[:, 1].max(), self.st[:, 2].max()
+        z0, z1 = self.st[:, 3].min(), self.st[:, 3].max()
+        return np.array([-w, self.st[-1, 0], z0 - d], F), np.array([w, self.st[0, 0], z1 + d], F)
+
+
+class Scale(Node):
+    """A child scaled uniformly about the origin."""
+
+    def __init__(self, child, k):
+        self.child, self.k = child, float(k)
+
+    def eval(self, p):
+        d, m = self.child.eval(p / self.k)
+        return d * self.k, m
+
+    def bounds(self):
+        lo, hi = self.child.bounds()
+        return lo * self.k, hi * self.k

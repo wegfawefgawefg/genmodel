@@ -254,6 +254,7 @@ static int run_window(const Args& a, Asset& asset) {
             int64_t s = asset_stamp(asset);
             if (s != stamp) {
                 stamp = s;
+                printf("model changed, reloading\n");
                 SDL_Delay(200); // let the writer finish
                 Asset fresh;
                 if (load_asset(asset.obj_path, asset.anim_path, fresh)) {
@@ -308,6 +309,8 @@ static int run_window(const Args& a, Asset& asset) {
 }
 
 int main(int argc, char** argv) {
+    // line-buffered even when piped, so reload messages show up as they happen
+    setvbuf(stdout, nullptr, _IOLBF, 0);
     Args a;
     if (!parse_args(argc, argv, a)) {
         fprintf(stderr, "usage: viewer model.obj [--anim file.anim.sexp] [--capture out.png [--sheet |\n"

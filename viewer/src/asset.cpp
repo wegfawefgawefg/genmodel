@@ -64,15 +64,17 @@ static int64_t stamp_of(const std::string& path) {
     return ec ? 0 : (int64_t)t.time_since_epoch().count();
 }
 
+// a sum of every file's modification time: any change changes it (file clock counts can
+// be negative, and missing files count 0, so a max would miss changes)
 int64_t asset_stamp(const Asset& a) {
     int64_t s = model_stamp(a.obj_path);
-    s = std::max(s, stamp_of(rig_path_for(a.obj_path)));
+    s += stamp_of(rig_path_for(a.obj_path));
     if (!a.anim_path.empty()) {
-        s = std::max(s, stamp_of(a.anim_path));
-        s = std::max(s, stamp_of(bank_path_for(a.anim_path)));
+        s += stamp_of(a.anim_path);
+        s += stamp_of(bank_path_for(a.anim_path));
         std::error_code ec;
         for (const auto& e : fs::directory_iterator(clip_dir_for(a.anim_path), ec)) {
-            s = std::max(s, stamp_of(e.path().string()));
+            s += stamp_of(e.path().string());
         }
     }
     return s;

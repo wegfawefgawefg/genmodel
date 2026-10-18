@@ -237,8 +237,8 @@ int64_t model_stamp(const std::string& obj_path) {
     std::string tex = texture_path_for(obj_path);
     if (!tex.empty()) {
         auto tt = fs::last_write_time(tex, ec);
-        if (!ec && tt.time_since_epoch().count() > stamp) {
-            stamp = tt.time_since_epoch().count();
+        if (!ec) {
+            stamp += tt.time_since_epoch().count();
         }
     }
     return stamp;
