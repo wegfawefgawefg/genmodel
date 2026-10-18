@@ -10,7 +10,7 @@ from models.scoobee.kit import bolt_ring, bolts, hose, piston
 from scene import Piece
 from sdf import Box, Cylinder, Loft, Prism, Union, segment
 
-THIGH_LEN = 0.95
+THIGH_LEN = 1.25
 SHIN_LEN = 2.05
 
 

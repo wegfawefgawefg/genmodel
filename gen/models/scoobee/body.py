@@ -11,7 +11,7 @@ from sdf import Box, Cylinder, Loft, Prism, Torus, Union, segment
 
 NECK_AT = (0.0, -0.24, 0.98)
 SH_X, SH_Y, SH_Z = 0.84, -0.12, 0.3
-WAIST_AT = (0.0, -0.6, -0.1)
+WAIST_AT = (0.0, -0.74, -0.1)
 
 
 def sensor_pod(x, y, z, r=0.25):

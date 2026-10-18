@@ -46,9 +46,9 @@
       (seg 7.5 10.0 4.2 4.2)
       (seg 10.0 11.5 4.2 8.0)
       (seg 11.5 14.0 8.0 8.0)
-      (seg 14.0 15.8 8.0 12.5)
-      (seg 15.8 20.0 12.5 12.5)
-      (seg 20.0 22.5 12.5 4.2)
+      (seg 14.0 15.8 8.0 15.0)
+      (seg 15.8 20.0 15.0 15.0)
+      (seg 20.0 22.5 15.0 4.2)
       (seg 22.5 24.0 4.2 4.2)
       (seg 24.0 25.5 4.2 1.8)
       (seg 25.5 27.5 1.8 1.8)
@@ -61,9 +61,9 @@
             (crouch 0.22) (arms 22) (elbows -18) (toe-off 38) (strike 2) (twist 15) (impact 0.14) (flex 18) (shove 6.0) (reach 0.6) (invert 9))
     ; all out: huge strides, the swing leg thrown far forward and the stance leg driven far back,
     ; low and leaning hard into it, arms pumping
-    (allout (speed 12.5) (cadence 1.08) (duty 0.27) (lift 0.5) (bob 0.0) (sway 0.02) (lean 7)
-            (crouch 0.38) (arms 26) (elbows -22) (toe-off 48) (strike 0) (twist 20) (impact 0.16) (flex 22)
-            (shove 10.0) (reach 1.0) (invert 10)))
+    (allout (speed 15.0) (cadence 1.0) (duty 0.25) (lift 0.6) (bob 0.0) (sway 0.02) (lean 11)
+            (crouch 0.6) (arms 32) (elbows -26) (toe-off 55) (strike 0) (twist 26) (impact 0.18) (flex 24)
+            (shove 13.0) (reach 1.4) (invert 11)))
 
   ; and glances about now and then
   (wave head (rot 0 1 0 8) (freq 0.11))
