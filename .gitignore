@@ -6,8 +6,10 @@ viewer/compile_commands.json
 ref/*.png
 ref/*.jpg
 .vscode/
-out/test/
 ref/sounds/
 .cache/
 # clips cut from ref/sounds (third-party), rebuilt by tools/sounds.py
 out/*/sounds/
+# build outputs, all rebuilt by gen/build.py and the scripts (see README)
+out/
+dist/
